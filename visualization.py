@@ -33,6 +33,9 @@ BULGARIAN_MONTH_TO_NUM = {
 }
 
 class AppUI:
+    # Reservation duration constant (90 minutes = 1h30m)
+    RESERVATION_DURATION_MINUTES = 90
+    
     def __init__(self, db_manager: DBManager):
         self.db = db_manager
         self.admin_logged_in = False
@@ -65,15 +68,25 @@ class AppUI:
 
     # ----------------------------------------------------------------
     # Detect if user leaves admin tab -> auto logout
+    # Also synchronize table layout when switching to it
     # ----------------------------------------------------------------
     def on_main_tab_changed(self, event):
-        """If the user leaves the 'Администраторски панел' tab, log out automatically."""
+        """
+        Handle tab change events.
+        - Auto-logout when leaving admin tab
+        - Refresh table layout when switching to it (ensures filter synchronization)
+        """
         current_tab_id = self.notebook.index("current")
         current_tab_text = self.notebook.tab(current_tab_id, "text")
 
         # If user is leaving the admin tab and is currently logged in, log out
         if current_tab_text != "Администраторски панел" and self.admin_logged_in:
             self.logout_admin()
+        
+        # If user switches to table layout tab, refresh it to reflect current filters
+        if current_tab_text == "Разпределение на масите":
+            self.refresh_table_layout()
+            self.update_table_layout_filter_label()
 
     # ----------------------------------------------------------------
     # Reservations Tab
@@ -82,6 +95,7 @@ class AppUI:
         self.res_tab = ttk.Frame(self.notebook)
         self.notebook.add(self.res_tab, text="Резервации")
 
+        # Date filters in first row
         filter_frame = ttk.Frame(self.res_tab)
         filter_frame.pack(fill="x", padx=10, pady=(10, 0))
 
@@ -101,7 +115,7 @@ class AppUI:
             width=12
         )
         self.month_filter_combo.pack(side="left", padx=(0,15))
-        self.month_filter_combo.bind("<<ComboboxSelected>>", lambda e: self.refresh_reservations_tree())
+        self.month_filter_combo.bind("<<ComboboxSelected>>", lambda e: self.on_date_filter_changed())
 
         # DAY Filter (default to current day)
         ttk.Label(filter_frame, text="Ден:").pack(side="left", padx=(0,5))
@@ -118,7 +132,7 @@ class AppUI:
             width=5
         )
         self.day_filter_combo.pack(side="left", padx=(0,15))
-        self.day_filter_combo.bind("<<ComboboxSelected>>", lambda e: self.refresh_reservations_tree())
+        self.day_filter_combo.bind("<<ComboboxSelected>>", lambda e: self.on_date_filter_changed())
 
         # STATUS Filter (default = "Резервирана")
         ttk.Label(filter_frame, text="Статус:").pack(side="left", padx=(0,5))
@@ -148,6 +162,47 @@ class AppUI:
         )
         self.table_filter_combo.pack(side="left", padx=(0,15))
         self.table_filter_combo.bind("<<ComboboxSelected>>", lambda e: self.refresh_reservations_tree())
+
+        # Time filters in second row
+        time_filter_frame = ttk.Frame(self.res_tab)
+        time_filter_frame.pack(fill="x", padx=10, pady=(5, 0))
+
+        ttk.Label(time_filter_frame, text="Час:").pack(side="left", padx=(0,5))
+        
+        # HOUR Filter
+        self.hour_filter_var = tk.StringVar(value="Всички")
+        hour_values = ["Всички"] + [f"{h:02d}" for h in range(24)]
+        self.hour_filter_combo = ttk.Combobox(
+            time_filter_frame,
+            textvariable=self.hour_filter_var,
+            values=hour_values,
+            state="readonly",
+            width=8
+        )
+        self.hour_filter_combo.pack(side="left", padx=(0,10))
+        self.hour_filter_combo.bind("<<ComboboxSelected>>", lambda e: self.on_time_filter_changed())
+        
+        ttk.Label(time_filter_frame, text="Минути:").pack(side="left", padx=(0,5))
+        
+        # MINUTE Filter (00, 15, 30, 45)
+        self.minute_filter_var = tk.StringVar(value="Всички")
+        minute_values = ["Всички", "00", "15", "30", "45"]
+        self.minute_filter_combo = ttk.Combobox(
+            time_filter_frame,
+            textvariable=self.minute_filter_var,
+            values=minute_values,
+            state="readonly",
+            width=8
+        )
+        self.minute_filter_combo.pack(side="left", padx=(0,10))
+        self.minute_filter_combo.bind("<<ComboboxSelected>>", lambda e: self.on_time_filter_changed())
+        
+        # Helper text
+        ttk.Label(
+            time_filter_frame,
+            text="(показва резервации, които започват в/след избраното време)",
+            font=("TkDefaultFont", 8, "italic")
+        ).pack(side="left", padx=(10,0))
 
         # TreeView
         columns = (
@@ -198,7 +253,67 @@ class AppUI:
 
         self.refresh_reservations_tree()
 
+    def on_date_filter_changed(self):
+        """
+        Callback when date filters (month or day) change.
+        Updates both reservations tree and table layout to maintain synchronization.
+        """
+        self.refresh_reservations_tree()
+        self.refresh_table_layout()
+    
+    def on_time_filter_changed(self):
+        """
+        Callback when time filters (hour or minute) change.
+        Updates both reservations tree and table layout to maintain synchronization.
+        """
+        self.refresh_reservations_tree()
+        self.refresh_table_layout()
+
+    def get_selected_datetime(self):
+        """
+        Combine selected date and time filters into a timezone-aware datetime.
+        Returns None if date/time is not fully specified.
+        Returns (year, month, day, hour, minute) as a timezone-aware datetime or None.
+        """
+        from zoneinfo import ZoneInfo
+        from datetime import datetime
+        
+        selected_month_bg = self.month_filter_var.get()
+        selected_day_str = self.day_filter_var.get()
+        selected_hour_str = self.hour_filter_var.get()
+        selected_minute_str = self.minute_filter_var.get()
+        
+        # If any component is "Всички", we can't form a specific datetime
+        if (selected_month_bg == "Всички" or selected_day_str == "Всички" or 
+            selected_hour_str == "Всички" or selected_minute_str == "Всички"):
+            return None
+        
+        # Get current year (could be extended to allow year selection)
+        current_year = date.today().year
+        
+        try:
+            month_num = BULGARIAN_MONTH_TO_NUM.get(selected_month_bg)
+            day_num = int(selected_day_str)
+            hour_num = int(selected_hour_str)
+            minute_num = int(selected_minute_str)
+            
+            # Create timezone-aware datetime for Europe/Sofia
+            dt = datetime(current_year, month_num, day_num, hour_num, minute_num,
+                         tzinfo=ZoneInfo("Europe/Sofia"))
+            return dt
+        except (ValueError, TypeError):
+            return None
+
     def refresh_reservations_tree(self):
+        """
+        Refresh the reservations tree with time-aware filtering.
+        
+        Time-aware logic:
+        - If a specific time is selected, show:
+          A) Ongoing reservations (that overlap the selected time)
+          B) Future reservations (that start at/after the selected time)
+        - Sort by start time ascending
+        """
         for item in self.res_tree.get_children():
             self.res_tree.delete(item)
 
@@ -208,26 +323,48 @@ class AppUI:
         selected_day_str  = self.day_filter_var.get()
         selected_status   = self.status_filter_var.get()
         selected_table    = self.table_filter_var.get()
+        
+        # Get selected datetime if available
+        selected_dt = self.get_selected_datetime()
 
         filtered = []
         for res in all_reservations:
             try:
-                dt = datetime.strptime(res["time_slot"], "%Y-%m-%d %H:%M")
+                res_start = datetime.strptime(res["time_slot"], "%Y-%m-%d %H:%M")
             except ValueError:
                 continue
+            
+            # Calculate reservation end time (start + 90 minutes)
+            res_end = res_start + timedelta(minutes=self.RESERVATION_DURATION_MINUTES)
 
             # Filter by month
             if selected_month_bg != "Всички":
                 numeric_month = BULGARIAN_MONTH_TO_NUM.get(selected_month_bg, None)
-                if numeric_month and dt.month != numeric_month:
+                if numeric_month and res_start.month != numeric_month:
                     continue
 
             # Filter by day
             if selected_day_str != "Всички":
-                if dt.day != int(selected_day_str):
+                if res_start.day != int(selected_day_str):
+                    continue
+            
+            # Time-aware filtering
+            if selected_dt is not None:
+                # Convert selected_dt to naive for comparison (both are in Europe/Sofia context)
+                selected_naive = selected_dt.replace(tzinfo=None)
+                
+                # Check if reservation overlaps or is in the future
+                # Include if:
+                # 1) Reservation is ongoing at selected time: res_start < selected_time < res_end
+                # 2) Reservation starts at or after selected time: res_start >= selected_time
+                
+                is_ongoing = res_start < selected_naive < res_end
+                is_future = res_start >= selected_naive
+                
+                if not (is_ongoing or is_future):
                     continue
 
-            # Status
+            # Status filter
             if selected_status != "Всички":
                 db_status = res["status"]
                 if db_status == "Reserved":
@@ -239,18 +376,19 @@ class AppUI:
                 if db_status_bg != selected_status:
                     continue
 
-            # Table
+            # Table filter
             if selected_table != "Всички":
                 if str(res["table_number"]) != selected_table:
                     continue
 
             filtered.append(res)
 
+        # Sort by start time ascending
         def sort_key(r):
             try:
                 return datetime.strptime(r["time_slot"], "%Y-%m-%d %H:%M")
             except ValueError:
-                return datetime.now()
+                return datetime.now(ZoneInfo("Europe/Sofia"))
         filtered.sort(key=sort_key)
 
         for res in filtered:
@@ -265,9 +403,11 @@ class AppUI:
             additional_info = res["additional_info"] or ""
             phone = res["phone_number"] or ""
 
+            # FIX: Store reservation ID as TreeView iid for reliable identification
             self.res_tree.insert(
                 "",
                 "end",
+                iid=str(res["id"]),  # Use database ID as item identifier
                 values=(
                     res["table_number"],
                     res["time_slot"],
@@ -420,14 +560,14 @@ class AppUI:
             messagebox.showwarning("Внимание", "Моля, изберете резервация за промяна.")
             return
 
-        values = self.res_tree.item(selected, "values")
-        res_id = values[0]
+        # FIX: Use TreeView iid (which is the database ID) instead of column values
+        res_id = int(selected)
 
         # Fetch the current reservation details from DB
         reservations = self.db.get_reservations()
         current = None
         for r in reservations:
-            if str(r["id"]) == str(res_id):
+            if r["id"] == res_id:
                 current = r
                 break
         if not current:
@@ -598,13 +738,16 @@ class AppUI:
         if not selected:
             messagebox.showwarning("Внимание", "Моля, изберете резервация за изтриване.")
             return
-        values = self.res_tree.item(selected, "values")
-        res_id = values[0]
+        
+        # FIX: Use TreeView iid (which is the database ID) instead of column values
+        res_id = int(selected)
+        
         confirm = messagebox.askyesno("Потвърди", "Наистина ли искате да отмените тази резервация?")
         if confirm:
             self.db.delete_reservation(res_id)
             messagebox.showinfo("Изтрито", "Резервацията е отменена.")
             self.refresh_reservations_tree()
+            self.refresh_table_layout()  # Also refresh table layout after deletion
 
     # ----------------------------------------------------------------
     # Table Layout Tab
@@ -613,32 +756,205 @@ class AppUI:
         self.table_tab = ttk.Frame(self.notebook)
         self.notebook.add(self.table_tab, text="Разпределение на масите")
 
-        # Now 50 tables
+        # Filter context label (shows current date and time selection)
+        self.table_filter_context_frame = ttk.Frame(self.table_tab)
+        self.table_filter_context_frame.pack(fill="x", padx=10, pady=(10, 5))
+        
+        ttk.Label(
+            self.table_filter_context_frame,
+            text="Дата и час:",
+            font=("TkDefaultFont", 9, "bold")
+        ).pack(side="left", padx=(0, 5))
+        
+        self.table_filter_label = ttk.Label(
+            self.table_filter_context_frame,
+            text="",
+            font=("TkDefaultFont", 9)
+        )
+        self.table_filter_label.pack(side="left")
+        
+        # Legend for table colors
+        legend_frame = ttk.Frame(self.table_tab)
+        legend_frame.pack(fill="x", padx=10, pady=(0, 10))
+        
+        ttk.Label(
+            legend_frame,
+            text="Легенда:",
+            font=("TkDefaultFont", 9, "bold")
+        ).pack(side="left", padx=(0, 10))
+        
+        # Red indicator - currently occupied
+        red_indicator = ttk.Label(legend_frame, text="● Заета сега", foreground="#dc3545")
+        red_indicator.pack(side="left", padx=(0, 10))
+        
+        # Orange indicator - soon occupied (within 30 minutes)
+        orange_indicator = ttk.Label(legend_frame, text="● Заета след 30 мин", foreground="#fd7e14")
+        orange_indicator.pack(side="left", padx=(0, 10))
+        
+        # Green indicator - available
+        green_indicator = ttk.Label(legend_frame, text="● Свободна", foreground="#28a745")
+        green_indicator.pack(side="left")
+
+        # Table buttons container
+        tables_frame = ttk.Frame(self.table_tab)
+        tables_frame.pack(fill="both", expand=True, padx=10, pady=5)
+        
+        # 50 tables with labels underneath for "soon occupied" indicator
         self.table_buttons = {}
+        self.table_labels = {}  # Labels for "soon occupied" messages
         for i in range(50):
             table_num = i + 1
-            btn = ttk.Button(self.table_tab, text=f"Маса {table_num}", width=15)
-            btn.grid(row=i // 5, column=i % 5, padx=10, pady=10)
+            
+            # Container for each table (button + label)
+            table_container = ttk.Frame(tables_frame)
+            table_container.grid(row=i // 5, column=i % 5, padx=10, pady=10)
+            
+            # Table button
+            btn = ttk.Button(table_container, text=f"Маса {table_num}", width=15)
+            btn.pack()
             self.table_buttons[table_num] = btn
+            
+            # Label for "soon occupied" message (hidden by default)
+            lbl = ttk.Label(
+                table_container, 
+                text="", 
+                font=("TkDefaultFont", 7),
+                foreground="#fd7e14"
+            )
+            lbl.pack()
+            self.table_labels[table_num] = lbl
+        
+        self.update_table_layout_filter_label()
         self.refresh_table_layout()
 
     def refresh_table_layout(self):
+        """
+        Refresh table layout with time-aware occupancy logic.
+        
+        Shows:
+        - Red: Currently occupied at selected time
+        - Orange: Will be occupied within 30 minutes ("soon occupied")
+        - Green: Available
+        """
         reservations = self.db.get_reservations()
-        reserved_tables = {}
-        now = datetime.now()
+        
+        # Use consistent timezone for datetime comparisons
+        now = datetime.now(ZoneInfo("Europe/Sofia"))
+        
+        # Get selected datetime (if time is specified)
+        selected_dt = self.get_selected_datetime()
+        
+        # Tracking dictionaries
+        occupied_tables = {}  # Currently occupied at selected time
+        soon_occupied_tables = {}  # Will be occupied within 30 minutes
+        
         for res in reservations:
             try:
-                res_time = datetime.strptime(res["time_slot"], "%Y-%m-%d %H:%M")
+                res_start = datetime.strptime(res["time_slot"], "%Y-%m-%d %H:%M")
+                res_end = res_start + timedelta(minutes=self.RESERVATION_DURATION_MINUTES)
             except ValueError:
                 continue
-            if res["status"] == "Reserved" and res_time >= now:
-                reserved_tables[res["table_number"]] = True
-
-        for table_num, btn in self.table_buttons.items():
-            if table_num in reserved_tables:
-                btn.configure(style="danger.TButton")
+            
+            # Only consider "Reserved" status
+            if res["status"] != "Reserved":
+                continue
+            
+            table_num = res["table_number"]
+            
+            # Time-aware logic
+            if selected_dt is not None:
+                # Specific time selected - check occupancy at that exact time
+                selected_naive = selected_dt.replace(tzinfo=None)
+                
+                # Check if table is occupied at selected time
+                # Occupied if: res_start <= selected_time < res_end
+                is_occupied = res_start <= selected_naive < res_end
+                
+                if is_occupied:
+                    occupied_tables[table_num] = res_start
+                else:
+                    # Check if "soon occupied" (starts within next 30 minutes)
+                    # Soon occupied if: selected_time < res_start <= selected_time + 30 min
+                    soon_threshold = selected_naive + timedelta(minutes=30)
+                    
+                    if selected_naive < res_start <= soon_threshold:
+                        # Only mark as "soon occupied" if not already occupied
+                        if table_num not in occupied_tables:
+                            soon_occupied_tables[table_num] = res_start
             else:
+                # No specific time selected - fall back to date-based logic
+                selected_month_bg = self.month_filter_var.get()
+                selected_day_str = self.day_filter_var.get()
+                
+                # Apply month filter
+                if selected_month_bg != "Всички":
+                    numeric_month = BULGARIAN_MONTH_TO_NUM.get(selected_month_bg, None)
+                    if numeric_month and res_start.month != numeric_month:
+                        continue
+                
+                # Apply day filter
+                if selected_day_str != "Всички":
+                    if res_start.day != int(selected_day_str):
+                        continue
+                
+                # For "Всички" dates, only show future reservations
+                if selected_month_bg == "Всички" and selected_day_str == "Всички":
+                    if res_start >= now:
+                        occupied_tables[table_num] = res_start
+                else:
+                    # For specific date, show all reservations
+                    occupied_tables[table_num] = res_start
+        
+        # Update button colors and labels
+        for table_num in self.table_buttons.keys():
+            btn = self.table_buttons[table_num]
+            lbl = self.table_labels[table_num]
+            
+            if table_num in occupied_tables:
+                # Currently occupied - red
+                btn.configure(style="danger.TButton")
+                lbl.config(text="")
+            elif table_num in soon_occupied_tables:
+                # Soon occupied - orange
+                btn.configure(style="warning.TButton")
+                # Show reservation start time
+                res_time = soon_occupied_tables[table_num]
+                lbl.config(text=f"Заета в {res_time.strftime('%H:%M')}")
+            else:
+                # Available - green
                 btn.configure(style="success.TButton")
+                lbl.config(text="")
+
+    def update_table_layout_filter_label(self):
+        """
+        Update the filter context label in the table layout tab.
+        Shows which date and time is currently selected for viewing.
+        """
+        selected_month_bg = self.month_filter_var.get()
+        selected_day_str = self.day_filter_var.get()
+        selected_hour_str = self.hour_filter_var.get()
+        selected_minute_str = self.minute_filter_var.get()
+        
+        # Build date part
+        if selected_month_bg == "Всички" and selected_day_str == "Всички":
+            date_text = "Всички бъдещи резервации"
+        elif selected_month_bg != "Всички" and selected_day_str == "Всички":
+            date_text = f"{selected_month_bg} (всички дни)"
+        elif selected_month_bg == "Всички" and selected_day_str != "Всички":
+            date_text = f"Ден {selected_day_str} (всички месеци)"
+        else:
+            date_text = f"{selected_day_str} {selected_month_bg}"
+        
+        # Build time part
+        if selected_hour_str != "Всички" and selected_minute_str != "Всички":
+            time_text = f" в {selected_hour_str}:{selected_minute_str}"
+        elif selected_hour_str != "Всички":
+            time_text = f" час {selected_hour_str}"
+        else:
+            time_text = ""
+        
+        filter_text = date_text + time_text
+        self.table_filter_label.config(text=filter_text)
 
     # ----------------------------------------------------------------
     # Admin Tab with single-window login
