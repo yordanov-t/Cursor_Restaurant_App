@@ -67,7 +67,24 @@ def create_table_layout_screen(
     )
     
     def build_table_button(table_num: int) -> ft.Container:
-        """Build a single table button."""
+        """Build a single table button with shape from DB."""
+        # Get table shape from database
+        shape = db.get_table_shape(table_num)
+        
+        # Determine dimensions and border radius based on shape
+        if shape == "ROUND":
+            width = 50
+            height = 50
+            border_radius = 25  # Full circle
+        elif shape == "SQUARE":
+            width = 50
+            height = 50
+            border_radius = Radius.SM
+        else:  # RECTANGLE (default)
+            width = 55
+            height = 45
+            border_radius = Radius.SM
+        
         button = ft.Container(
             content=body_text(
                 f"{table_num}",
@@ -77,10 +94,10 @@ def create_table_layout_screen(
             ),
             bgcolor=Colors.TABLE_FREE,
             padding=Spacing.SM,
-            border_radius=Radius.SM,
+            border_radius=border_radius,
             alignment=ft.alignment.center,
-            width=50,
-            height=50,
+            width=width,
+            height=height,
         )
         
         status_label = body_text(
@@ -96,7 +113,7 @@ def create_table_layout_screen(
                 spacing=2,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            width=60,
+            width=65,
         )
         
         table_containers[table_num] = container
@@ -160,19 +177,22 @@ def create_table_layout_screen(
         filter_label.value = f"{get_filter_text()}"
         
         for table_num, container in table_containers.items():
+            # Check if table_num exists in table_states (might be deleted)
+            if table_num not in table_states:
+                continue
+                
             state, info = table_states[table_num]
             
             # Get the button and label from the container
             button = container.content.controls[0]
             status_label = container.content.controls[1]
             
+            # Update color based on state
             if state == TableState.OCCUPIED:
                 button.bgcolor = Colors.TABLE_OCCUPIED
-                button.color = Colors.TEXT_PRIMARY
                 status_label.value = ""
             elif state == TableState.SOON_30:
                 button.bgcolor = Colors.TABLE_SOON
-                button.color = Colors.TEXT_PRIMARY
                 if info:
                     status_label.value = f"{info.strftime('%H:%M')}"
                 else:
@@ -180,7 +200,6 @@ def create_table_layout_screen(
                 status_label.color = Colors.WARNING
             else:  # FREE
                 button.bgcolor = Colors.TABLE_FREE
-                button.color = Colors.TEXT_PRIMARY
                 status_label.value = ""
         
         page.update()

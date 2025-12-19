@@ -5,7 +5,7 @@ Provides Create/Edit/Assign Tables/Delete functionality for sections.
 """
 
 import flet as ft
-from typing import Callable, Optional, Dict, Any, List, Set
+from typing import Callable, Optional, Dict, Any, List, Set, Union
 from enum import Enum
 from ui_flet.theme import Colors, Spacing, Radius, Typography, heading, label, body_text
 from ui_flet.compat import icons, FontWeight, ScrollMode
@@ -93,42 +93,54 @@ class SectionActionPanel:
             border=ft.border.only(bottom=ft.BorderSide(1, Colors.BORDER)),
         )
     
-    def _build_table_grid(self) -> ft.Column:
-        """Build the table selection grid (10 rows x 5 columns)."""
+    def _build_table_grid(self, get_available_tables: Callable = None) -> ft.Column:
+        """Build the table selection grid with scrolling support."""
         self.checkbox_refs.clear()
         table_grid = []
         
-        for row_idx in range(10):
-            row_items = []
-            for col_idx in range(5):
-                table_num = row_idx * 5 + col_idx + 1
-                
-                def make_toggle_handler(tn: int):
-                    def toggle(e):
-                        if e.control.value:
-                            self.selected_tables.add(tn)
-                        else:
-                            self.selected_tables.discard(tn)
-                    return toggle
-                
-                cb = ft.Checkbox(
-                    label=str(table_num),
-                    value=table_num in self.selected_tables,
-                    on_change=make_toggle_handler(table_num),
-                    fill_color={
-                        ft.ControlState.SELECTED: Colors.ACCENT_PRIMARY,
-                    },
-                )
-                self.checkbox_refs[table_num] = cb
-                row_items.append(
-                    ft.Container(
-                        content=cb,
-                        width=70,
-                    )
-                )
-            table_grid.append(ft.Row(row_items, spacing=Spacing.XS))
+        # Get available tables (default 1-50 if no callback provided)
+        if get_available_tables:
+            available_tables = get_available_tables()
+        else:
+            available_tables = list(range(1, 51))
         
-        return ft.Column(table_grid, spacing=Spacing.XS)
+        # Build rows with 5 tables each
+        current_row = []
+        for table_num in sorted(available_tables):
+            def make_toggle_handler(tn: int):
+                def toggle(e):
+                    if e.control.value:
+                        self.selected_tables.add(tn)
+                    else:
+                        self.selected_tables.discard(tn)
+                return toggle
+            
+            cb = ft.Checkbox(
+                label=str(table_num),
+                value=table_num in self.selected_tables,
+                on_change=make_toggle_handler(table_num),
+                fill_color={
+                    ft.ControlState.SELECTED: Colors.ACCENT_PRIMARY,
+                },
+            )
+            self.checkbox_refs[table_num] = cb
+            current_row.append(
+                ft.Container(
+                    content=cb,
+                    width=70,
+                )
+            )
+            
+            if len(current_row) >= 5:
+                table_grid.append(ft.Row(current_row, spacing=Spacing.XS))
+                current_row = []
+        
+        # Add remaining items
+        if current_row:
+            table_grid.append(ft.Row(current_row, spacing=Spacing.XS))
+        
+        # Return scrollable column
+        return ft.Column(table_grid, spacing=Spacing.XS, scroll=ScrollMode.AUTO)
     
     def _select_all_tables(self, e):
         """Select all tables."""
@@ -182,12 +194,12 @@ class SectionActionPanel:
                 ft.Container(height=Spacing.SM),
                 ft.Container(
                     content=table_grid,
-                    height=280,
+                    expand=True,
                     border=ft.border.all(1, Colors.BORDER),
                     border_radius=Radius.SM,
                     padding=Spacing.SM,
                 ),
-                ft.Container(height=Spacing.XL),
+                ft.Container(height=Spacing.MD),
                 ft.Row(
                     [
                         ft.ElevatedButton(
@@ -208,7 +220,6 @@ class SectionActionPanel:
                     spacing=Spacing.MD,
                 ),
             ],
-            scroll=ScrollMode.AUTO,
             expand=True,
         )
     
@@ -262,11 +273,11 @@ class SectionActionPanel:
             [
                 ft.Container(height=Spacing.LG),
                 body_text(f"Секция: {section_name}", weight=FontWeight.BOLD, size=Typography.SIZE_MD),
-                ft.Container(height=Spacing.LG),
-                ft.Divider(height=1, color=Colors.BORDER),
                 ft.Container(height=Spacing.MD),
-                body_text("Изберете маси за секцията:", weight=FontWeight.MEDIUM),
+                ft.Divider(height=1, color=Colors.BORDER),
                 ft.Container(height=Spacing.SM),
+                body_text("Изберете маси за секцията:", weight=FontWeight.MEDIUM),
+                ft.Container(height=Spacing.XS),
                 ft.Row([
                     ft.TextButton(
                         "Избери всички",
@@ -279,15 +290,15 @@ class SectionActionPanel:
                         style=ft.ButtonStyle(color=Colors.TEXT_SECONDARY),
                     ),
                 ], spacing=Spacing.SM),
-                ft.Container(height=Spacing.SM),
+                ft.Container(height=Spacing.XS),
                 ft.Container(
                     content=table_grid,
-                    height=280,
+                    expand=True,
                     border=ft.border.all(1, Colors.BORDER),
                     border_radius=Radius.SM,
                     padding=Spacing.SM,
                 ),
-                ft.Container(height=Spacing.XL),
+                ft.Container(height=Spacing.MD),
                 ft.Row(
                     [
                         ft.ElevatedButton(
@@ -308,7 +319,6 @@ class SectionActionPanel:
                     spacing=Spacing.MD,
                 ),
             ],
-            scroll=ScrollMode.AUTO,
             expand=True,
         )
     

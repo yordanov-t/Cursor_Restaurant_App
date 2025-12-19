@@ -70,9 +70,18 @@ class DBManager:
                 UNIQUE(table_number)
             )
         ''')
+        # Create tables metadata table for shapes
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS tables_metadata (
+                table_number INTEGER PRIMARY KEY,
+                shape TEXT NOT NULL DEFAULT 'RECTANGLE'
+            )
+        ''')
         self.conn.commit()
         # Initialize default sections if none exist
         self._initialize_default_sections()
+        # Initialize default tables if none exist
+        self._initialize_default_tables()
     # -------------------------
     # Waiter management methods
     # -------------------------
@@ -401,3 +410,99 @@ class DBManager:
                 (section_id, table_num)
             )
         self.conn.commit()
+    
+    # -------------------------
+    # Tables metadata management
+    # -------------------------
+    def _initialize_default_tables(self):
+        """Initialize default tables (1-50) if none exist."""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM tables_metadata")
+        count = cursor.fetchone()[0]
+        if count == 0:
+            # Create default 50 tables with RECTANGLE shape
+            for table_num in range(1, 51):
+                cursor.execute(
+                    "INSERT INTO tables_metadata (table_number, shape) VALUES (?, ?)",
+                    (table_num, "RECTANGLE")
+                )
+            self.conn.commit()
+    
+    def get_all_tables(self):
+        """Get all tables with their metadata."""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM tables_metadata ORDER BY table_number")
+        return [{"table_number": row["table_number"], "shape": row["shape"]} for row in cursor.fetchall()]
+    
+    def get_table(self, table_number):
+        """Get a single table's metadata."""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM tables_metadata WHERE table_number = ?", (table_number,))
+        row = cursor.fetchone()
+        if row:
+            return {"table_number": row["table_number"], "shape": row["shape"]}
+        return None
+    
+    def get_table_shape(self, table_number):
+        """Get the shape of a table (returns 'RECTANGLE' as default if not found)."""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT shape FROM tables_metadata WHERE table_number = ?", (table_number,))
+        row = cursor.fetchone()
+        return row["shape"] if row else "RECTANGLE"
+    
+    def create_table(self, table_number, shape="RECTANGLE"):
+        """Create a new table with the given shape."""
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute(
+                "INSERT INTO tables_metadata (table_number, shape) VALUES (?, ?)",
+                (table_number, shape)
+            )
+            self.conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False  # Table already exists
+    
+    def update_table_shape(self, table_number, shape):
+        """Update a table's shape."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "UPDATE tables_metadata SET shape = ? WHERE table_number = ?",
+            (shape, table_number)
+        )
+        self.conn.commit()
+        return cursor.rowcount > 0
+    
+    def delete_table(self, table_number):
+        """
+        Delete a table. Returns False if table has active reservations.
+        Also removes from section assignments.
+        """
+        cursor = self.conn.cursor()
+        # Check for active reservations
+        cursor.execute(
+            "SELECT COUNT(*) FROM reservations WHERE table_number = ? AND status = 'Reserved'",
+            (table_number,)
+        )
+        if cursor.fetchone()[0] > 0:
+            return False  # Has active reservations
+        
+        # Remove from section assignments
+        cursor.execute("DELETE FROM section_tables WHERE table_number = ?", (table_number,))
+        # Delete the table
+        cursor.execute("DELETE FROM tables_metadata WHERE table_number = ?", (table_number,))
+        self.conn.commit()
+        return True
+    
+    def get_available_table_numbers(self):
+        """Get list of all existing table numbers."""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT table_number FROM tables_metadata ORDER BY table_number")
+        return [row["table_number"] for row in cursor.fetchall()]
+    
+    def get_next_available_table_number(self):
+        """Get the next available table number."""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT MAX(table_number) FROM tables_metadata")
+        max_num = cursor.fetchone()[0]
+        return (max_num or 0) + 1

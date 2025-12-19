@@ -1,7 +1,8 @@
 """
-Admin screen for Flet UI - V2 with full functionality, glassmorphism, and sections management.
+Admin screen for Flet UI - V2 with full functionality, glassmorphism, and management panels.
 
-Uses right-side Action Panel pattern for section operations (no popups).
+Uses right-side Action Panel pattern for all operations (no popups).
+Includes: Waiters, Sections, Tables management.
 """
 
 import flet as ft
@@ -11,6 +12,7 @@ from ui_flet.theme import (Colors, Spacing, Radius, Typography, heading, label,
                              body_text, glass_container, glass_button, glass_card)
 from ui_flet.compat import icons, ScrollMode, FontWeight
 from ui_flet.section_action_panel import SectionActionPanel
+from ui_flet.admin_action_panel import AdminActionPanel, TABLE_SHAPES
 
 
 ADMIN_USERNAME = "admin"
@@ -105,75 +107,52 @@ def create_admin_screen(
     main_content = ft.Container(expand=True)
     
     # ==========================================
-    # Waiter Management Tab
+    # Waiter Management Tab (with Action Panel)
     # ==========================================
     waiters_list = ft.Column(spacing=Spacing.SM, scroll=ScrollMode.AUTO)
     
     def refresh_waiters():
+        """Refresh the waiters list."""
         waiters = db.get_waiters()
         waiters_list.controls.clear()
+        
         for w in waiters:
             waiter_id = w["id"]
+            waiter_name = w["name"]
+            waiter_copy = {"id": waiter_id, "name": waiter_name}
+            
             card = glass_container(
                 content=ft.Row(
                     [
                         ft.Column(
                             [
-                                body_text(w["name"], weight=FontWeight.BOLD),
+                                body_text(waiter_name, weight=FontWeight.BOLD),
                                 label(f"ID: {waiter_id}"),
                             ],
                             spacing=2,
+                            expand=True,
                         ),
-                        ft.IconButton(
-                            icon=icons.DELETE,
-                            tooltip="Изтрий",
-                            icon_color=Colors.DANGER,
-                            on_click=lambda e, wid=waiter_id: delete_waiter(wid)
-                        ),
+                        ft.Row([
+                            ft.IconButton(
+                                icon=icons.EDIT,
+                                tooltip="Редактирай",
+                                icon_color=Colors.ACCENT_PRIMARY,
+                                on_click=lambda e, w=waiter_copy: admin_panel.open_waiter_edit(w),
+                            ),
+                            ft.IconButton(
+                                icon=icons.DELETE,
+                                tooltip="Изтрий",
+                                icon_color=Colors.DANGER,
+                                on_click=lambda e, w=waiter_copy: admin_panel.open_waiter_delete(w),
+                            ),
+                        ], spacing=0),
                     ],
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 ),
                 padding=Spacing.MD,
             )
             waiters_list.controls.append(card)
-        page.update()
-    
-    def add_waiter(e):
-        name_field = ft.TextField(label="Име на сервитьор", width=300)
         
-        def save_waiter(e):
-            if name_field.value:
-                db.add_waiter(name_field.value)
-                refresh_waiters()
-                page.dialog.open = False
-                page.snack_bar = ft.SnackBar(
-                    ft.Text("Сервитьорът е добавен"),
-                    bgcolor=Colors.SUCCESS
-                )
-                page.snack_bar.open = True
-                page.update()
-        
-        dialog = ft.AlertDialog(
-            title=heading("Добави сервитьор", size=Typography.SIZE_LG),
-            content=name_field,
-            actions=[
-                ft.TextButton("Запази", on_click=save_waiter),
-                ft.TextButton("Отказ", on_click=lambda e: setattr(page.dialog, 'open', False) or page.update()),
-            ],
-            bgcolor=Colors.SURFACE,
-        )
-        page.dialog = dialog
-        dialog.open = True
-        page.update()
-    
-    def delete_waiter(waiter_id):
-        db.remove_waiter(waiter_id)
-        refresh_waiters()
-        page.snack_bar = ft.SnackBar(
-            ft.Text("Сервитьорът е изтрит"),
-            bgcolor=Colors.SUCCESS
-        )
-        page.snack_bar.open = True
         page.update()
     
     # ==========================================
@@ -199,7 +178,6 @@ def create_admin_screen(
             else:
                 tables_text = "Няма маси"
             
-            # Create a copy of section data for closures
             section_copy = dict(section)
             
             card = glass_container(
@@ -244,13 +222,96 @@ def create_admin_screen(
         
         page.update()
     
-    # Section Action Panel callbacks
-    def handle_section_panel_close():
-        """Handle section panel close."""
+    # ==========================================
+    # Tables Management Tab (with Action Panel)
+    # ==========================================
+    tables_list = ft.Column(spacing=Spacing.SM, scroll=ScrollMode.AUTO)
+    
+    def refresh_tables():
+        """Refresh the tables list."""
+        tables = db.get_all_tables()
+        tables_list.controls.clear()
+        
+        for t in tables:
+            table_num = t["table_number"]
+            shape = t["shape"]
+            shape_display = TABLE_SHAPES.get(shape, shape)
+            table_copy = dict(t)
+            
+            # Shape indicator
+            if shape == "ROUND":
+                shape_border_radius = 25
+            elif shape == "SQUARE":
+                shape_border_radius = 4
+            else:  # RECTANGLE
+                shape_border_radius = 4
+            
+            shape_indicator = ft.Container(
+                width=30 if shape != "SQUARE" else 20,
+                height=20,
+                bgcolor=Colors.ACCENT_PRIMARY + "40",
+                border=ft.border.all(2, Colors.ACCENT_PRIMARY),
+                border_radius=shape_border_radius if shape == "ROUND" else shape_border_radius,
+            )
+            
+            card = glass_container(
+                content=ft.Row(
+                    [
+                        ft.Row([
+                            body_text(f"#{table_num}", weight=FontWeight.BOLD, size=Typography.SIZE_MD),
+                            ft.Container(width=Spacing.MD),
+                            shape_indicator,
+                            ft.Container(width=Spacing.SM),
+                            label(shape_display, color=Colors.TEXT_SECONDARY),
+                        ], spacing=Spacing.XS),
+                        ft.Row([
+                            ft.IconButton(
+                                icon=icons.EDIT,
+                                tooltip="Промени форма",
+                                icon_color=Colors.ACCENT_PRIMARY,
+                                on_click=lambda e, t=table_copy: admin_panel.open_table_edit(t),
+                            ),
+                            ft.IconButton(
+                                icon=icons.DELETE,
+                                tooltip="Изтрий",
+                                icon_color=Colors.DANGER,
+                                on_click=lambda e, t=table_copy: admin_panel.open_table_delete(t),
+                            ),
+                        ], spacing=0),
+                    ],
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                ),
+                padding=Spacing.MD,
+            )
+            tables_list.controls.append(card)
+        
         page.update()
     
+    # ==========================================
+    # Action Panel Callbacks
+    # ==========================================
+    
+    def handle_panel_close():
+        """Handle any panel close."""
+        page.update()
+    
+    # Waiter callbacks
+    def handle_waiter_create(name: str) -> bool:
+        db.add_waiter(name)
+        refresh_waiters()
+        return True
+    
+    def handle_waiter_update(waiter_id: int, name: str) -> bool:
+        db.update_waiter(waiter_id, name)
+        refresh_waiters()
+        return True
+    
+    def handle_waiter_delete(waiter_id: int):
+        db.remove_waiter(waiter_id)
+        refresh_waiters()
+    
+    # Section callbacks
     def handle_create_section(name: str, tables: List[int]) -> bool:
-        """Handle create section from panel."""
         section_id = db.create_section(name)
         if section_id:
             if tables:
@@ -260,41 +321,72 @@ def create_admin_screen(
         return False
     
     def handle_update_section(section_id: int, name: str) -> bool:
-        """Handle update section from panel."""
         result = db.update_section(section_id, name)
         if result:
             refresh_sections()
         return result
     
     def handle_assign_tables(section_id: int, tables: List[int]):
-        """Handle assign tables from panel."""
         db.assign_tables_to_section(section_id, tables)
         refresh_sections()
     
     def handle_delete_section(section_id: int):
-        """Handle delete section from panel."""
         db.delete_section(section_id)
         refresh_sections()
     
-    # Create section action panel
+    # Table callbacks
+    def handle_table_create(table_number: int, shape: str) -> bool:
+        result = db.create_table(table_number, shape)
+        if result:
+            refresh_tables()
+        return result
+    
+    def handle_table_update(table_number: int, shape: str) -> bool:
+        result = db.update_table_shape(table_number, shape)
+        if result:
+            refresh_tables()
+        return result
+    
+    def handle_table_delete(table_number: int) -> bool:
+        result = db.delete_table(table_number)
+        if result:
+            refresh_tables()
+            refresh_sections()  # Update section table counts
+        return result
+    
+    # ==========================================
+    # Create Action Panels
+    # ==========================================
+    
     section_panel = SectionActionPanel(
         page=page,
-        on_close=handle_section_panel_close,
+        on_close=handle_panel_close,
         on_create=handle_create_section,
         on_update=handle_update_section,
         on_assign_tables=handle_assign_tables,
         on_delete=handle_delete_section,
     )
     
+    admin_panel = AdminActionPanel(
+        page=page,
+        on_close=handle_panel_close,
+        on_waiter_create=handle_waiter_create,
+        on_waiter_update=handle_waiter_update,
+        on_waiter_delete=handle_waiter_delete,
+        on_table_create=handle_table_create,
+        on_table_update=handle_table_update,
+        on_table_delete=handle_table_delete,
+    )
+    
     # Initial data load
     refresh_waiters()
     refresh_sections()
+    refresh_tables()
     
     # ==========================================
     # Build Admin Screen with Tabs
     # ==========================================
     
-    # Build main content with tabs
     main_content.content = ft.Column(
         [
             # Header with logout (single exit control)
@@ -323,12 +415,23 @@ def create_admin_screen(
                             icon=icons.PERSON,
                             content=ft.Column([
                                 ft.Container(
-                                    content=glass_button(
-                                        "Добави сервитьор",
-                                        icon=icons.ADD,
-                                        on_click=add_waiter,
-                                        variant="primary",
-                                    ),
+                                    content=ft.Row([
+                                        glass_button(
+                                            "Нов сервитьор",
+                                            icon=icons.ADD,
+                                            on_click=lambda e: admin_panel.open_waiter_create(),
+                                            variant="primary",
+                                        ),
+                                        ft.Container(
+                                            content=body_text(
+                                                "Управлявайте сервитьорите на ресторанта.",
+                                                color=Colors.TEXT_SECONDARY,
+                                                size=Typography.SIZE_SM,
+                                            ),
+                                            expand=True,
+                                            padding=ft.padding.only(left=Spacing.LG),
+                                        ),
+                                    ]),
                                     padding=Spacing.LG,
                                 ),
                                 ft.Container(
@@ -372,6 +475,39 @@ def create_admin_screen(
                             ]),
                         ),
                         
+                        # Tables Tab (NEW)
+                        ft.Tab(
+                            text="Маси",
+                            icon=icons.TABLE_RESTAURANT,
+                            content=ft.Column([
+                                ft.Container(
+                                    content=ft.Row([
+                                        glass_button(
+                                            "Добави маса",
+                                            icon=icons.ADD,
+                                            on_click=lambda e: admin_panel.open_table_create(db.get_next_available_table_number()),
+                                            variant="primary",
+                                        ),
+                                        ft.Container(
+                                            content=body_text(
+                                                "Управлявайте масите и техните форми.",
+                                                color=Colors.TEXT_SECONDARY,
+                                                size=Typography.SIZE_SM,
+                                            ),
+                                            expand=True,
+                                            padding=ft.padding.only(left=Spacing.LG),
+                                        ),
+                                    ]),
+                                    padding=Spacing.LG,
+                                ),
+                                ft.Container(
+                                    content=tables_list,
+                                    expand=True,
+                                    padding=Spacing.LG,
+                                ),
+                            ]),
+                        ),
+                        
                         # Reports Tab
                         ft.Tab(
                             text="Отчети",
@@ -404,11 +540,18 @@ def create_admin_screen(
         expand=True,
     )
     
-    # Return layout with section action panel on the right
+    # Combined panels container (section panel OR admin panel can be open)
+    # We'll use a Stack approach - only one panel should be open at a time
+    panels_row = ft.Row([
+        section_panel.container,
+        admin_panel.container,
+    ], spacing=0)
+    
+    # Return layout with action panels on the right
     return ft.Row(
         [
             main_content,
-            section_panel.container,
+            panels_row,
         ],
         spacing=0,
         expand=True,
