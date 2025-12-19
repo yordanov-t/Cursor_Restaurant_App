@@ -6,7 +6,7 @@ Modern, professional UI using Flet framework with full functional parity.
 
 import flet as ft
 from db import DBManager
-from core import ReservationService, TableLayoutService
+from core import ReservationService, TableLayoutService, BackupService
 from ui_flet.compat import log_compatibility_info, icons, ThemeMode, Colors as CompatColors
 from ui_flet.app_state import AppState
 from ui_flet.theme import Colors
@@ -22,11 +22,29 @@ def main(page: ft.Page):
     db = DBManager()
     reservation_service = ReservationService(db)
     table_layout_service = TableLayoutService(db)
+    backup_service = BackupService(db)
     
     # Ensure default waiters exist
     if not db.get_waiters():
         db.add_waiter("John Doe")
         db.add_waiter("Jane Smith")
+    
+    # ==========================================
+    # Daily automatic backup on startup
+    # ==========================================
+    backup_filename = backup_service.create_daily_backup_if_needed()
+    if backup_filename:
+        print(f"Daily backup created: {backup_filename}")
+    else:
+        if backup_service.has_today_backup():
+            print("Today's backup already exists.")
+        else:
+            print("No backup created (check for errors).")
+    
+    # Clean up old backups (keep last 30)
+    deleted_count = backup_service.cleanup_old_backups(keep_count=30)
+    if deleted_count > 0:
+        print(f"Cleaned up {deleted_count} old backup(s).")
     
     # Initialize application state
     app_state = AppState()

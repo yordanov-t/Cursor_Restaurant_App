@@ -2,17 +2,19 @@
 Admin screen for Flet UI - V2 with full functionality, glassmorphism, and management panels.
 
 Uses right-side Action Panel pattern for all operations (no popups).
-Includes: Waiters, Sections, Tables management.
+Includes: Waiters, Sections, Tables, Backup management.
 """
 
 import flet as ft
 from typing import Callable, List
 from db import DBManager
+from core import BackupService
 from ui_flet.theme import (Colors, Spacing, Radius, Typography, heading, label,
                              body_text, glass_container, glass_button, glass_card)
 from ui_flet.compat import icons, ScrollMode, FontWeight
 from ui_flet.section_action_panel import SectionActionPanel
 from ui_flet.admin_action_panel import AdminActionPanel, TABLE_SHAPES
+from ui_flet.backup_action_panel import BackupActionPanel
 
 
 ADMIN_USERNAME = "admin"
@@ -97,6 +99,9 @@ def create_admin_screen(
     # ==========================================
     # Logged in - show admin functions
     # ==========================================
+    
+    # Initialize backup service
+    backup_service = BackupService(db)
     
     def logout(e):
         """Handle logout - only one exit control (top header)."""
@@ -288,6 +293,99 @@ def create_admin_screen(
         page.update()
     
     # ==========================================
+    # Backup Management Tab
+    # ==========================================
+    backups_list = ft.Column(spacing=Spacing.SM, scroll=ScrollMode.AUTO)
+    
+    def refresh_backups():
+        """Refresh the backups list."""
+        backups = backup_service.list_backups(include_counts=True)
+        backups_list.controls.clear()
+        
+        if not backups:
+            backups_list.controls.append(
+                ft.Container(
+                    content=body_text("Няма налични архиви", color=Colors.TEXT_SECONDARY),
+                    padding=Spacing.XL,
+                    alignment=ft.alignment.center,
+                )
+            )
+        else:
+            for backup in backups:
+                backup_copy = dict(backup)
+                timestamp_str = backup.get("timestamp_str", "")
+                size_str = backup.get("size_str", "")
+                counts = backup.get("counts", {})
+                
+                # Build counts summary
+                counts_parts = []
+                if counts.get("reservations", 0) > 0:
+                    counts_parts.append(f"{counts['reservations']} рез.")
+                if counts.get("waiters", 0) > 0:
+                    counts_parts.append(f"{counts['waiters']} серв.")
+                counts_summary = ", ".join(counts_parts) if counts_parts else ""
+                
+                card = glass_container(
+                    content=ft.Row(
+                        [
+                            ft.Column(
+                                [
+                                    ft.Row([
+                                        ft.Icon(icons.BACKUP, color=Colors.ACCENT_PRIMARY, size=20),
+                                        ft.Container(width=Spacing.XS),
+                                        body_text(timestamp_str, weight=FontWeight.BOLD),
+                                    ]),
+                                    ft.Row([
+                                        label(f"Размер: {size_str}", color=Colors.TEXT_SECONDARY),
+                                        ft.Container(width=Spacing.MD),
+                                        label(counts_summary, color=Colors.TEXT_SECONDARY) if counts_summary else ft.Container(),
+                                    ]),
+                                ],
+                                spacing=4,
+                                expand=True,
+                            ),
+                            ft.Row([
+                                ft.IconButton(
+                                    icon=icons.RESTORE,
+                                    tooltip="Възстанови",
+                                    icon_color=Colors.WARNING,
+                                    on_click=lambda e, b=backup_copy: backup_panel.open_restore(b),
+                                ),
+                                ft.IconButton(
+                                    icon=icons.DELETE,
+                                    tooltip="Изтрий",
+                                    icon_color=Colors.DANGER,
+                                    on_click=lambda e, b=backup_copy: backup_panel.open_delete(b),
+                                ),
+                            ], spacing=0),
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    padding=Spacing.MD,
+                )
+                backups_list.controls.append(card)
+        
+        page.update()
+    
+    def create_manual_backup(e):
+        """Create a manual backup."""
+        filename = backup_service.create_backup()
+        if filename:
+            page.snack_bar = ft.SnackBar(
+                ft.Text(f"Архивът е създаден успешно: {filename}", color=Colors.TEXT_PRIMARY),
+                bgcolor=Colors.SUCCESS
+            )
+            page.snack_bar.open = True
+            refresh_backups()
+        else:
+            page.snack_bar = ft.SnackBar(
+                ft.Text("Грешка при създаване на архив", color=Colors.TEXT_PRIMARY),
+                bgcolor=Colors.DANGER
+            )
+            page.snack_bar.open = True
+        page.update()
+    
+    # ==========================================
     # Action Panel Callbacks
     # ==========================================
     
@@ -354,6 +452,24 @@ def create_admin_screen(
             refresh_sections()  # Update section table counts
         return result
     
+    # Backup callbacks
+    def handle_backup_delete(filename: str) -> bool:
+        result = backup_service.delete_backup(filename)
+        if result:
+            refresh_backups()
+        return result
+    
+    def handle_backup_restore(filename: str) -> bool:
+        result = backup_service.restore_backup(filename)
+        if result:
+            # Refresh all data after restore
+            refresh_waiters()
+            refresh_sections()
+            refresh_tables()
+            refresh_backups()
+            refresh_callback()  # Refresh main app state
+        return result
+    
     # ==========================================
     # Create Action Panels
     # ==========================================
@@ -378,10 +494,18 @@ def create_admin_screen(
         on_table_delete=handle_table_delete,
     )
     
+    backup_panel = BackupActionPanel(
+        page=page,
+        on_close=handle_panel_close,
+        on_delete=handle_backup_delete,
+        on_restore=handle_backup_restore,
+    )
+    
     # Initial data load
     refresh_waiters()
     refresh_sections()
     refresh_tables()
+    refresh_backups()
     
     # ==========================================
     # Build Admin Screen with Tabs
@@ -475,7 +599,7 @@ def create_admin_screen(
                             ]),
                         ),
                         
-                        # Tables Tab (NEW)
+                        # Tables Tab
                         ft.Tab(
                             text="Маси",
                             icon=icons.TABLE_RESTAURANT,
@@ -508,25 +632,45 @@ def create_admin_screen(
                             ]),
                         ),
                         
+                        # Backup Tab (NEW - Full Implementation)
+                        ft.Tab(
+                            text="Архивиране",
+                            icon=icons.BACKUP,
+                            content=ft.Column([
+                                ft.Container(
+                                    content=ft.Row([
+                                        glass_button(
+                                            "Архивирай базата",
+                                            icon=icons.BACKUP,
+                                            on_click=create_manual_backup,
+                                            variant="primary",
+                                        ),
+                                        ft.Container(
+                                            content=body_text(
+                                                "Създавайте и възстановявайте архиви на базата данни.",
+                                                color=Colors.TEXT_SECONDARY,
+                                                size=Typography.SIZE_SM,
+                                            ),
+                                            expand=True,
+                                            padding=ft.padding.only(left=Spacing.LG),
+                                        ),
+                                    ]),
+                                    padding=Spacing.LG,
+                                ),
+                                ft.Container(
+                                    content=backups_list,
+                                    expand=True,
+                                    padding=Spacing.LG,
+                                ),
+                            ]),
+                        ),
+                        
                         # Reports Tab
                         ft.Tab(
                             text="Отчети",
                             icon=icons.ASSESSMENT,
                             content=ft.Container(
                                 content=body_text("Отчети ще бъдат добавени скоро", color=Colors.TEXT_SECONDARY),
-                                padding=Spacing.XL,
-                            ),
-                        ),
-                        
-                        # Backup Tab
-                        ft.Tab(
-                            text="Архивиране",
-                            icon=icons.BACKUP,
-                            content=ft.Container(
-                                content=ft.Column([
-                                    glass_button("Архивирай базата", icon=icons.BACKUP, variant="secondary"),
-                                    glass_button("Възстанови базата", icon=icons.RESTORE, variant="secondary"),
-                                ], spacing=Spacing.MD),
                                 padding=Spacing.XL,
                             ),
                         ),
@@ -540,11 +684,11 @@ def create_admin_screen(
         expand=True,
     )
     
-    # Combined panels container (section panel OR admin panel can be open)
-    # We'll use a Stack approach - only one panel should be open at a time
+    # Combined panels container (only one panel should be open at a time)
     panels_row = ft.Row([
         section_panel.container,
         admin_panel.container,
+        backup_panel.container,
     ], spacing=0)
     
     # Return layout with action panels on the right

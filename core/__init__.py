@@ -17,6 +17,7 @@ from .time_utils import (
 
 from .reservation_service import ReservationService
 from .table_layout_service import TableLayoutService, TableState
+from .backup_service import BackupService
 
 __all__ = [
     'parse_time_slot',
@@ -29,5 +30,6 @@ __all__ = [
     'ReservationService',
     'TableLayoutService',
     'TableState',
+    'BackupService',
 ]
 

@@ -1,7 +1,10 @@
 """
-Reservations screen for Flet UI - V3 with Action Panel and gradient background.
+Reservations screen for Flet UI - V3 with left sidebar layout and Date picker.
 
-Replaces popup dialogs with right-side animated action panel.
+Features:
+- Left sidebar (~20%) with filters and navigation
+- Right content (~80%) with reservations list and action panel
+- Single "Дата" calendar picker filter (replaces Month/Day)
 """
 
 import flet as ft
@@ -30,13 +33,13 @@ def create_reservations_screen(
     app_state,
     refresh_callback: Callable
 ):
-    """Create the reservations screen with Action Panel integration."""
+    """Create the reservations screen with left sidebar and Action Panel integration."""
     
     # Reservations list container
     reservations_list = ft.Column(spacing=Spacing.SM, scroll=ScrollMode.AUTO)
     
-    # Main content area (will compress when panel opens)
-    main_content = ft.Container(expand=True)
+    # Right content area (will compress when panel opens)
+    right_content = ft.Container(expand=True)
     
     def get_waiter_name(waiter_id):
         """Get waiter name by ID."""
@@ -48,11 +51,20 @@ def create_reservations_screen(
                 return w["name"]
         return ""
     
+    def get_date_display():
+        """Get the current filter date for display."""
+        d = app_state.filter_date
+        month_name = BULGARIAN_MONTHS[d.month - 1]
+        return f"{d.day} {month_name} {d.year}"
+    
     def refresh_reservations():
         """Refresh the reservations list based on current filters."""
         # Get filter parameters
         selected_date = app_state.get_selected_date()
         selected_dt = app_state.get_selected_datetime()
+        
+        # Update date display
+        date_display_text.value = get_date_display()
         
         # Convert status filter
         status_filter = None
@@ -277,8 +289,6 @@ def create_reservations_screen(
     
     def handle_panel_close():
         """Handle action panel close."""
-        # Expand main content back to full width
-        main_content.expand = True
         page.update()
     
     # Create action panel
@@ -290,45 +300,84 @@ def create_reservations_screen(
         get_waiters=lambda: db.get_waiters(),
     )
     
-    # Filter dropdowns - compact widths for single-row layout
-    month_dropdown = ft.Dropdown(
-        label="Месец",
-        value=app_state.selected_month,
-        options=[ft.dropdown.Option("Всички")] + [ft.dropdown.Option(m) for m in BULGARIAN_MONTHS],
-        on_change=lambda e: app_state.update_filter(selected_month=e.control.value) or refresh_reservations(),
-        width=130,
-        text_size=Typography.SIZE_SM,
-        dense=True,
+    # ==========================================
+    # Date Picker Setup
+    # ==========================================
+    
+    def open_date_picker(e):
+        """Open the date picker dialog."""
+        current_date = app_state.filter_date
+        
+        def handle_date_change(e):
+            if e.control.value:
+                selected_date = e.control.value
+                app_state.update_filter(filter_date=selected_date)
+                refresh_reservations()
+        
+        def handle_dismiss(e):
+            pass  # Do nothing on dismiss
+        
+        date_picker = ft.DatePicker(
+            first_date=date(2020, 1, 1),
+            last_date=date(2030, 12, 31),
+            value=current_date,
+            on_change=handle_date_change,
+            on_dismiss=handle_dismiss,
+        )
+        
+        page.overlay.append(date_picker)
+        date_picker.open = True
+        page.update()
+    
+    # Date display text (updated when filter changes)
+    date_display_text = body_text(get_date_display(), weight=FontWeight.MEDIUM)
+    
+    # Date picker button
+    date_picker_field = ft.Container(
+        content=ft.Row(
+            [
+                ft.Container(
+                    content=date_display_text,
+                    expand=True,
+                ),
+                ft.Icon(icons.CALENDAR_TODAY, color=Colors.ACCENT_PRIMARY, size=20),
+            ],
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+        ),
+        bgcolor=Colors.SURFACE_GLASS,
+        border=ft.border.all(1, Colors.BORDER),
+        border_radius=Radius.SM,
+        padding=ft.padding.symmetric(horizontal=Spacing.MD, vertical=Spacing.SM),
+        on_click=open_date_picker,
+        ink=True,
     )
     
-    day_dropdown = ft.Dropdown(
-        label="Ден",
-        value=app_state.selected_day,
-        options=[ft.dropdown.Option("Всички")] + [ft.dropdown.Option(str(d)) for d in range(1, 32)],
-        on_change=lambda e: app_state.update_filter(selected_day=e.control.value) or refresh_reservations(),
-        width=85,
-        text_size=Typography.SIZE_SM,
-        dense=True,
-    )
+    # ==========================================
+    # Filter Dropdowns
+    # ==========================================
     
     hour_dropdown = ft.Dropdown(
         label="Час",
         value=app_state.selected_hour,
         options=[ft.dropdown.Option("Всички")] + [ft.dropdown.Option(f"{h:02d}") for h in range(24)],
         on_change=lambda e: app_state.update_filter(selected_hour=e.control.value) or refresh_reservations(),
-        width=85,
+        width=None,
         text_size=Typography.SIZE_SM,
         dense=True,
+        bgcolor=Colors.SURFACE_GLASS,
+        border_color=Colors.BORDER,
     )
     
     minute_dropdown = ft.Dropdown(
         label="Минути",
         value=app_state.selected_minute,
-        options=[ft.dropdown.Option(m) for m in ["00", "15", "30", "45"]],  # No "Всички"
+        options=[ft.dropdown.Option(m) for m in ["00", "15", "30", "45"]],
         on_change=lambda e: app_state.update_filter(selected_minute=e.control.value) or refresh_reservations(),
-        width=90,
+        width=None,
         text_size=Typography.SIZE_SM,
         dense=True,
+        bgcolor=Colors.SURFACE_GLASS,
+        border_color=Colors.BORDER,
     )
     
     status_dropdown = ft.Dropdown(
@@ -340,9 +389,11 @@ def create_reservations_screen(
             ft.dropdown.Option("Отменена"),
         ],
         on_change=lambda e: app_state.update_filter(selected_status=e.control.value) or refresh_reservations(),
-        width=130,
+        width=None,
         text_size=Typography.SIZE_SM,
         dense=True,
+        bgcolor=Colors.SURFACE_GLASS,
+        border_color=Colors.BORDER,
     )
     
     table_dropdown = ft.Dropdown(
@@ -350,65 +401,100 @@ def create_reservations_screen(
         value=app_state.selected_table,
         options=[ft.dropdown.Option("Всички")] + [ft.dropdown.Option(str(i)) for i in range(1, 51)],
         on_change=lambda e: app_state.update_filter(selected_table=e.control.value) or refresh_reservations(),
-        width=95,
+        width=None,
         text_size=Typography.SIZE_SM,
         dense=True,
+        bgcolor=Colors.SURFACE_GLASS,
+        border_color=Colors.BORDER,
     )
     
-    # Filter bar - single row with horizontal scroll
-    filter_bar = glass_container(
-        content=ft.Row(
-            [
-                month_dropdown,
-                day_dropdown,
-                hour_dropdown,
-                minute_dropdown,
-                status_dropdown,
-                table_dropdown,
-            ],
-            spacing=Spacing.SM,
-            scroll=ScrollMode.AUTO,  # Enable horizontal scrolling if needed
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+    # ==========================================
+    # Left Sidebar
+    # ==========================================
+    
+    left_sidebar = ft.Container(
+        content=glass_container(
+            content=ft.Column(
+                [
+                    # Title
+                    heading("Филтри", size=Typography.SIZE_LG, weight=FontWeight.BOLD),
+                    ft.Divider(height=1, color=Colors.BORDER),
+                    
+                    # Date picker
+                    ft.Container(
+                        content=ft.Column([
+                            label("Дата", color=Colors.TEXT_SECONDARY),
+                            date_picker_field,
+                        ], spacing=4),
+                        padding=ft.padding.only(top=Spacing.SM),
+                    ),
+                    
+                    ft.Container(height=Spacing.SM),
+                    
+                    # Time filters (hour + minute)
+                    ft.Container(
+                        content=ft.Column([
+                            label("Час", color=Colors.TEXT_SECONDARY),
+                            ft.Row([
+                                ft.Container(content=hour_dropdown, expand=True),
+                                ft.Container(content=minute_dropdown, expand=True),
+                            ], spacing=Spacing.XS),
+                        ], spacing=4),
+                    ),
+                    
+                    ft.Container(height=Spacing.SM),
+                    
+                    # Status filter
+                    status_dropdown,
+                    
+                    ft.Container(height=Spacing.SM),
+                    
+                    # Table filter
+                    table_dropdown,
+                    
+                    ft.Container(expand=True),  # Spacer
+                    
+                    ft.Divider(height=1, color=Colors.BORDER),
+                    
+                    # Create reservation button
+                    glass_button(
+                        "Създай резервация",
+                        icon=icons.ADD,
+                        on_click=lambda e: action_panel.open_create(app_state),
+                        variant="primary",
+                        width=None,
+                    ),
+                    
+                    ft.Container(height=Spacing.SM),
+                    
+                    # Navigation to table layout
+                    glass_button(
+                        "Разпределение →",
+                        icon=icons.TABLE_CHART,
+                        on_click=lambda e: app_state.navigate_to("table_layout"),
+                        variant="secondary",
+                        width=None,
+                    ),
+                ],
+                spacing=Spacing.SM,
+                expand=True,
+            ),
+            padding=Spacing.LG,
         ),
+        width=240,
         padding=Spacing.MD,
     )
     
-    # Action buttons
-    action_buttons = ft.Row(
-        [
-            glass_button(
-                text="Създай резервация",
-                icon=icons.ADD,
-                on_click=lambda e: action_panel.open_create(app_state),
-                variant="primary",
-            ),
-            glass_button(
-                text="Разпределение на масите",
-                icon=icons.TABLE_CHART,
-                on_click=lambda e: app_state.navigate_to("table_layout"),
-                variant="secondary",
-            ),
-        ],
-        spacing=Spacing.MD,
-    )
+    # ==========================================
+    # Right Content Area
+    # ==========================================
     
-    # Build main content
-    main_content.content = ft.Column(
+    right_content.content = ft.Column(
         [
             # Header
             ft.Container(
                 content=heading("Резервации", size=Typography.SIZE_XL, weight=FontWeight.BOLD),
                 padding=ft.padding.only(left=Spacing.LG, top=Spacing.MD, bottom=Spacing.SM),
-            ),
-            # Filters
-            ft.Container(
-                content=filter_bar,
-                padding=ft.padding.symmetric(horizontal=Spacing.LG),
-            ),
-            # Actions
-            ft.Container(
-                content=action_buttons,
-                padding=ft.padding.symmetric(horizontal=Spacing.LG, vertical=Spacing.MD),
             ),
             # Reservations list
             ft.Container(
@@ -424,13 +510,14 @@ def create_reservations_screen(
     # Initial data load
     refresh_reservations()
     
-    # Return layout with action panel
+    # Return layout with left sidebar, right content, and action panel
     return ft.Row(
         [
-            main_content,
+            left_sidebar,
+            right_content,
             action_panel.container,
         ],
         spacing=0,
         expand=True,
+        vertical_alignment=ft.CrossAxisAlignment.START,
     )
-
