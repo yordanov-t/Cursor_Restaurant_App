@@ -2,6 +2,7 @@
 Admin Action Panel - Right-side animated panel for Admin management tasks.
 
 Provides Create/Edit/Delete functionality for Waiters and Tables.
+Supports internationalization.
 """
 
 import flet as ft
@@ -9,6 +10,7 @@ from typing import Callable, Optional, Dict, Any, List
 from enum import Enum
 from ui_flet.theme import Colors, Spacing, Radius, Typography, heading, label, body_text
 from ui_flet.compat import icons, FontWeight, ScrollMode
+from ui_flet.i18n import t
 
 
 class AdminPanelMode(Enum):
@@ -24,12 +26,17 @@ class AdminPanelMode(Enum):
     TABLE_DELETE = "table_delete"
 
 
-# Table shape options
+# Table shape keys (values are fetched dynamically via t())
 TABLE_SHAPES = {
-    "RECTANGLE": "Правоъгълна",
-    "SQUARE": "Квадратна",
-    "ROUND": "Кръгла",
+    "RECTANGLE": "shape_rectangle",
+    "SQUARE": "shape_square",
+    "ROUND": "shape_round",
 }
+
+def get_shape_display(shape_key: str) -> str:
+    """Get translated shape name."""
+    translation_key = TABLE_SHAPES.get(shape_key, "shape_rectangle")
+    return t(translation_key)
 
 
 class AdminActionPanel:
@@ -91,7 +98,7 @@ class AdminActionPanel:
                     ft.IconButton(
                         icon=icons.CLOSE,
                         icon_color=Colors.TEXT_SECONDARY,
-                        tooltip="Затвори",
+                        tooltip=t("close"),
                         on_click=lambda e: self.close(),
                     ),
                 ],
@@ -108,8 +115,8 @@ class AdminActionPanel:
     def _build_waiter_form(self, is_create: bool = True) -> ft.Column:
         """Build waiter create/edit form."""
         self.name_field = ft.TextField(
-            label="Име на сервитьор",
-            hint_text="Въведете име...",
+            label=t("waiter_name"),
+            hint_text="...",
             value="" if is_create else (self.current_data.get("name", "") if self.current_data else ""),
             width=None,
             bgcolor=Colors.SURFACE_GLASS,
@@ -118,7 +125,7 @@ class AdminActionPanel:
             autofocus=True,
         )
         
-        button_text = "Създай" if is_create else "Запази"
+        button_text = t("save") if not is_create else t("save")
         button_icon = icons.ADD if is_create else icons.SAVE
         handler = self._handle_waiter_create if is_create else self._handle_waiter_update
         
@@ -138,7 +145,7 @@ class AdminActionPanel:
                             expand=True,
                         ),
                         ft.OutlinedButton(
-                            text="Отказ",
+                            text=t("cancel"),
                             icon=icons.CANCEL,
                             on_click=lambda e: self.close(),
                             expand=True,
@@ -165,7 +172,7 @@ class AdminActionPanel:
                 ),
                 ft.Container(height=Spacing.LG),
                 body_text(
-                    f"Изтриване на сервитьор",
+                    t("delete_waiter"),
                     size=Typography.SIZE_MD,
                     color=Colors.TEXT_PRIMARY,
                     weight=FontWeight.BOLD,
@@ -179,7 +186,7 @@ class AdminActionPanel:
                 ),
                 ft.Container(height=Spacing.MD),
                 body_text(
-                    "Сигурни ли сте, че искате да изтриете този сервитьор?",
+                    t("delete_waiter_confirm"),
                     size=Typography.SIZE_SM,
                     color=Colors.TEXT_SECONDARY,
                 ),
@@ -187,7 +194,7 @@ class AdminActionPanel:
                 ft.Row(
                     [
                         ft.ElevatedButton(
-                            text="Изтрий",
+                            text=t("delete"),
                             icon=icons.DELETE_FOREVER,
                             bgcolor=Colors.DANGER,
                             color=Colors.TEXT_PRIMARY,
@@ -195,7 +202,7 @@ class AdminActionPanel:
                             expand=True,
                         ),
                         ft.OutlinedButton(
-                            text="Отказ",
+                            text=t("cancel"),
                             icon=icons.CANCEL,
                             on_click=lambda e: self.close(),
                             expand=True,
@@ -212,44 +219,41 @@ class AdminActionPanel:
         """Handle waiter create."""
         name = self.name_field.value.strip() if self.name_field else ""
         if not name:
-            self._show_error("Името не може да бъде празно")
+            self._show_error(t("name_required"))
             return
         
         success = self.on_waiter_create(name)
         if success:
-            self._show_success("Сервитьорът е добавен")
             self.close()
         else:
-            self._show_error("Грешка при създаване на сервитьор")
+            self._show_error(t("error"))
     
     def _handle_waiter_update(self):
         """Handle waiter update."""
         name = self.name_field.value.strip() if self.name_field else ""
         if not name:
-            self._show_error("Името не може да бъде празно")
+            self._show_error(t("name_required"))
             return
         
         if not self.current_data:
-            self._show_error("Грешка: няма данни за сервитьора")
+            self._show_error(t("error"))
             return
         
         waiter_id = self.current_data["id"]
         success = self.on_waiter_update(waiter_id, name)
         if success:
-            self._show_success("Сервитьорът е обновен")
             self.close()
         else:
-            self._show_error("Грешка при обновяване")
+            self._show_error(t("error"))
     
     def _handle_waiter_delete(self):
         """Handle waiter delete."""
         if not self.current_data:
-            self._show_error("Грешка: няма данни за сервитьора")
+            self._show_error(t("error"))
             return
         
         waiter_id = self.current_data["id"]
         self.on_waiter_delete(waiter_id)
-        self._show_success("Сервитьорът е изтрит")
         self.close()
     
     # ==========================================
@@ -259,7 +263,7 @@ class AdminActionPanel:
     def _build_table_create_form(self, next_table_number: int) -> ft.Column:
         """Build table create form."""
         self.table_number_field = ft.TextField(
-            label="Номер на маса",
+            label=t("table_number"),
             value=str(next_table_number),
             width=None,
             bgcolor=Colors.SURFACE_GLASS,
@@ -269,11 +273,11 @@ class AdminActionPanel:
         )
         
         self.shape_dropdown = ft.Dropdown(
-            label="Форма",
+            label=t("table_shape"),
             value="RECTANGLE",
             options=[
-                ft.dropdown.Option(key=key, text=text) 
-                for key, text in TABLE_SHAPES.items()
+                ft.dropdown.Option(key=key, text=get_shape_display(key)) 
+                for key in TABLE_SHAPES.keys()
             ],
             width=None,
             bgcolor=Colors.SURFACE_GLASS,
@@ -290,7 +294,7 @@ class AdminActionPanel:
                 ft.Row(
                     [
                         ft.ElevatedButton(
-                            text="Създай",
+                            text=t("save"),
                             icon=icons.ADD,
                             bgcolor=Colors.SUCCESS,
                             color=Colors.TEXT_PRIMARY,
@@ -298,7 +302,7 @@ class AdminActionPanel:
                             expand=True,
                         ),
                         ft.OutlinedButton(
-                            text="Отказ",
+                            text=t("cancel"),
                             icon=icons.CANCEL,
                             on_click=lambda e: self.close(),
                             expand=True,
@@ -317,11 +321,11 @@ class AdminActionPanel:
         current_shape = self.current_data.get("shape", "RECTANGLE") if self.current_data else "RECTANGLE"
         
         self.shape_dropdown = ft.Dropdown(
-            label="Форма",
+            label=t("table_shape"),
             value=current_shape,
             options=[
-                ft.dropdown.Option(key=key, text=text) 
-                for key, text in TABLE_SHAPES.items()
+                ft.dropdown.Option(key=key, text=get_shape_display(key)) 
+                for key in TABLE_SHAPES.keys()
             ],
             width=None,
             bgcolor=Colors.SURFACE_GLASS,
@@ -331,14 +335,14 @@ class AdminActionPanel:
         return ft.Column(
             [
                 ft.Container(height=Spacing.LG),
-                body_text(f"Маса #{table_num}", size=Typography.SIZE_LG, weight=FontWeight.BOLD),
+                body_text(f"{t('table')} #{table_num}", size=Typography.SIZE_LG, weight=FontWeight.BOLD),
                 ft.Container(height=Spacing.MD),
                 self.shape_dropdown,
                 ft.Container(height=Spacing.XL),
                 ft.Row(
                     [
                         ft.ElevatedButton(
-                            text="Запази",
+                            text=t("save"),
                             icon=icons.SAVE,
                             bgcolor=Colors.SUCCESS,
                             color=Colors.TEXT_PRIMARY,
@@ -346,7 +350,7 @@ class AdminActionPanel:
                             expand=True,
                         ),
                         ft.OutlinedButton(
-                            text="Отказ",
+                            text=t("cancel"),
                             icon=icons.CANCEL,
                             on_click=lambda e: self.close(),
                             expand=True,
@@ -373,28 +377,22 @@ class AdminActionPanel:
                 ),
                 ft.Container(height=Spacing.LG),
                 body_text(
-                    f"Изтриване на маса #{table_num}",
+                    f"{t('delete_table')} #{table_num}",
                     size=Typography.SIZE_MD,
                     color=Colors.TEXT_PRIMARY,
                     weight=FontWeight.BOLD,
                 ),
                 ft.Container(height=Spacing.SM),
                 body_text(
-                    "Сигурни ли сте, че искате да изтриете тази маса?",
+                    t("delete_table_confirm"),
                     size=Typography.SIZE_SM,
                     color=Colors.TEXT_SECONDARY,
-                ),
-                ft.Container(height=Spacing.SM),
-                body_text(
-                    "Масата ще бъде премахната от всички секции.",
-                    size=Typography.SIZE_SM,
-                    color=Colors.WARNING,
                 ),
                 ft.Container(height=Spacing.XL),
                 ft.Row(
                     [
                         ft.ElevatedButton(
-                            text="Изтрий",
+                            text=t("delete"),
                             icon=icons.DELETE_FOREVER,
                             bgcolor=Colors.DANGER,
                             color=Colors.TEXT_PRIMARY,
@@ -402,7 +400,7 @@ class AdminActionPanel:
                             expand=True,
                         ),
                         ft.OutlinedButton(
-                            text="Отказ",
+                            text=t("cancel"),
                             icon=icons.CANCEL,
                             on_click=lambda e: self.close(),
                             expand=True,
@@ -420,26 +418,25 @@ class AdminActionPanel:
         try:
             table_num = int(self.table_number_field.value) if self.table_number_field else 0
         except ValueError:
-            self._show_error("Невалиден номер на маса")
+            self._show_error(t("error"))
             return
         
         if table_num <= 0:
-            self._show_error("Номерът трябва да бъде положително число")
+            self._show_error(t("error"))
             return
         
         shape = self.shape_dropdown.value if self.shape_dropdown else "RECTANGLE"
         success = self.on_table_create(table_num, shape)
         
         if success:
-            self._show_success(f"Маса #{table_num} е създадена")
             self.close()
         else:
-            self._show_error(f"Маса #{table_num} вече съществува")
+            self._show_error(t("error"))
     
     def _handle_table_update(self):
         """Handle table update."""
         if not self.current_data:
-            self._show_error("Грешка: няма данни за масата")
+            self._show_error(t("error"))
             return
         
         table_num = self.current_data["table_number"]
@@ -447,25 +444,23 @@ class AdminActionPanel:
         success = self.on_table_update(table_num, shape)
         
         if success:
-            self._show_success(f"Маса #{table_num} е обновена")
             self.close()
         else:
-            self._show_error("Грешка при обновяване")
+            self._show_error(t("error"))
     
     def _handle_table_delete(self):
         """Handle table delete."""
         if not self.current_data:
-            self._show_error("Грешка: няма данни за масата")
+            self._show_error(t("error"))
             return
         
         table_num = self.current_data["table_number"]
         success = self.on_table_delete(table_num)
         
         if success:
-            self._show_success(f"Маса #{table_num} е изтрита")
             self.close()
         else:
-            self._show_error("Масата има активни резервации и не може да бъде изтрита")
+            self._show_error(t("error"))
     
     # ==========================================
     # Utility Methods
@@ -499,7 +494,7 @@ class AdminActionPanel:
         self.current_data = None
         
         self.panel_content.controls.clear()
-        self.panel_content.controls.append(self._build_header("Нов сервитьор"))
+        self.panel_content.controls.append(self._build_header(t("new_waiter")))
         form = self._build_waiter_form(is_create=True)
         self.panel_content.controls.append(
             ft.Container(content=form, padding=Spacing.LG, expand=True)
@@ -514,7 +509,7 @@ class AdminActionPanel:
         self.current_data = waiter
         
         self.panel_content.controls.clear()
-        self.panel_content.controls.append(self._build_header("Редактирай сервитьор"))
+        self.panel_content.controls.append(self._build_header(t("edit_waiter")))
         form = self._build_waiter_form(is_create=False)
         self.panel_content.controls.append(
             ft.Container(content=form, padding=Spacing.LG, expand=True)
@@ -529,7 +524,7 @@ class AdminActionPanel:
         self.current_data = waiter
         
         self.panel_content.controls.clear()
-        self.panel_content.controls.append(self._build_header("Изтрий сервитьор"))
+        self.panel_content.controls.append(self._build_header(t("delete_waiter")))
         confirm_ui = self._build_waiter_delete_confirm()
         self.panel_content.controls.append(
             ft.Container(content=confirm_ui, padding=Spacing.LG, expand=True)
@@ -544,7 +539,7 @@ class AdminActionPanel:
         self.current_data = None
         
         self.panel_content.controls.clear()
-        self.panel_content.controls.append(self._build_header("Нова маса"))
+        self.panel_content.controls.append(self._build_header(t("add_table")))
         form = self._build_table_create_form(next_table_number)
         self.panel_content.controls.append(
             ft.Container(content=form, padding=Spacing.LG, expand=True)
@@ -559,7 +554,7 @@ class AdminActionPanel:
         self.current_data = table
         
         self.panel_content.controls.clear()
-        self.panel_content.controls.append(self._build_header("Редактирай маса"))
+        self.panel_content.controls.append(self._build_header(t("edit_table")))
         form = self._build_table_edit_form()
         self.panel_content.controls.append(
             ft.Container(content=form, padding=Spacing.LG, expand=True)
@@ -574,7 +569,7 @@ class AdminActionPanel:
         self.current_data = table
         
         self.panel_content.controls.clear()
-        self.panel_content.controls.append(self._build_header("Изтрий маса"))
+        self.panel_content.controls.append(self._build_header(t("delete_table")))
         confirm_ui = self._build_table_delete_confirm()
         self.panel_content.controls.append(
             ft.Container(content=confirm_ui, padding=Spacing.LG, expand=True)
@@ -595,4 +590,3 @@ class AdminActionPanel:
     def is_open(self) -> bool:
         """Check if panel is open."""
         return self.mode != AdminPanelMode.HIDDEN
-

@@ -3,6 +3,7 @@ Admin screen for Flet UI - V2 with full functionality, glassmorphism, and manage
 
 Uses right-side Action Panel pattern for all operations (no popups).
 Includes: Waiters, Sections, Tables, Backup management.
+Supports internationalization.
 """
 
 import flet as ft
@@ -13,8 +14,9 @@ from ui_flet.theme import (Colors, Spacing, Radius, Typography, heading, label,
                              body_text, glass_container, glass_button, glass_card)
 from ui_flet.compat import icons, ScrollMode, FontWeight
 from ui_flet.section_action_panel import SectionActionPanel
-from ui_flet.admin_action_panel import AdminActionPanel, TABLE_SHAPES
+from ui_flet.admin_action_panel import AdminActionPanel, TABLE_SHAPES, get_shape_display
 from ui_flet.backup_action_panel import BackupActionPanel
+from ui_flet.i18n import t
 
 
 ADMIN_USERNAME = "admin"
@@ -31,54 +33,58 @@ def create_admin_screen(
     
     if not app_state.admin_logged_in:
         # Show login form
-        username_field = ft.TextField(
-            label="Потребителско име",
-            width=300,
-            text_size=Typography.SIZE_MD,
-        )
-        password_field = ft.TextField(
-            label="Парола",
-            password=True,
-            can_reveal_password=True,
-            width=300,
-            text_size=Typography.SIZE_MD,
-        )
         
-        def attempt_login(e):
+        def attempt_login(e=None):
+            """Attempt login - called by button or Enter key."""
             if username_field.value == ADMIN_USERNAME and password_field.value == ADMIN_PASSWORD:
                 app_state.set_admin_logged_in(True)
                 page.snack_bar = ft.SnackBar(
-                    ft.Text("Добре дошли, Администратор!"),
+                    ft.Text(t("welcome_admin")),
                     bgcolor=Colors.SUCCESS
                 )
                 page.snack_bar.open = True
                 refresh_callback()
             else:
                 page.snack_bar = ft.SnackBar(
-                    ft.Text("Невалидни администраторски данни"),
+                    ft.Text(t("invalid_credentials")),
                     bgcolor=Colors.DANGER
                 )
                 page.snack_bar.open = True
                 page.update()
         
+        username_field = ft.TextField(
+            label=t("username"),
+            width=300,
+            text_size=Typography.SIZE_MD,
+            on_submit=attempt_login,  # Enter key support
+        )
+        password_field = ft.TextField(
+            label=t("password"),
+            password=True,
+            can_reveal_password=True,
+            width=300,
+            text_size=Typography.SIZE_MD,
+            on_submit=attempt_login,  # Enter key support
+        )
+        
         return ft.Container(
             content=ft.Column(
                 [
                     ft.Container(
-                        content=heading("Администраторски панел"),
+                        content=heading(t("admin_panel")),
                         padding=Spacing.XL,
                     ),
                     ft.Container(
                         content=glass_card(
                             content=ft.Column([
-                                heading("Вход за администратор", size=Typography.SIZE_XL),
+                                heading(t("admin_login"), size=Typography.SIZE_XL),
                                 ft.Divider(height=Spacing.LG, color=Colors.BORDER),
                                 username_field,
                                 password_field,
                                 ft.Row([
-                                    glass_button("Вход", on_click=attempt_login, variant="primary"),
+                                    glass_button(t("login"), on_click=attempt_login, variant="primary"),
                                     glass_button(
-                                        "Отказ",
+                                        t("cancel"),
                                         on_click=lambda e: app_state.navigate_to("reservations"),
                                         variant="secondary"
                                     ),
@@ -104,7 +110,7 @@ def create_admin_screen(
     backup_service = BackupService(db)
     
     def logout(e):
-        """Handle logout - only one exit control (top header)."""
+        """Handle logout - single exit control in admin header."""
         app_state.set_admin_logged_in(False)
         app_state.navigate_to("reservations")
     
@@ -140,13 +146,13 @@ def create_admin_screen(
                         ft.Row([
                             ft.IconButton(
                                 icon=icons.EDIT,
-                                tooltip="Редактирай",
+                                tooltip=t("edit"),
                                 icon_color=Colors.ACCENT_PRIMARY,
                                 on_click=lambda e, w=waiter_copy: admin_panel.open_waiter_edit(w),
                             ),
                             ft.IconButton(
                                 icon=icons.DELETE,
-                                tooltip="Изтрий",
+                                tooltip=t("delete"),
                                 icon_color=Colors.DANGER,
                                 on_click=lambda e, w=waiter_copy: admin_panel.open_waiter_delete(w),
                             ),
@@ -177,11 +183,11 @@ def create_admin_screen(
             
             # Build tables display
             if section_tables:
-                tables_text = ", ".join(str(t) for t in section_tables[:10])
+                tables_text = ", ".join(str(t_num) for t_num in section_tables[:10])
                 if len(section_tables) > 10:
                     tables_text += f" ... (+{len(section_tables) - 10})"
             else:
-                tables_text = "Няма маси"
+                tables_text = t("no_tables")
             
             section_copy = dict(section)
             
@@ -192,7 +198,7 @@ def create_admin_screen(
                             ft.Column(
                                 [
                                     body_text(section_name, weight=FontWeight.BOLD, size=Typography.SIZE_MD),
-                                    label(f"Маси ({len(section_tables)}): {tables_text}", color=Colors.TEXT_SECONDARY),
+                                    label(f"{t('tables')} ({len(section_tables)}): {tables_text}", color=Colors.TEXT_SECONDARY),
                                 ],
                                 spacing=4,
                                 expand=True,
@@ -200,19 +206,19 @@ def create_admin_screen(
                             ft.Row([
                                 ft.IconButton(
                                     icon=icons.EDIT,
-                                    tooltip="Преименувай",
+                                    tooltip=t("rename"),
                                     icon_color=Colors.ACCENT_PRIMARY,
                                     on_click=lambda e, s=section_copy: section_panel.open_edit(s),
                                 ),
                                 ft.IconButton(
                                     icon=icons.TABLE_CHART,
-                                    tooltip="Промени маси",
+                                    tooltip=t("change_tables"),
                                     icon_color=Colors.WARNING,
                                     on_click=lambda e, s=section_copy: section_panel.open_assign_tables(s),
                                 ),
                                 ft.IconButton(
                                     icon=icons.DELETE,
-                                    tooltip="Изтрий",
+                                    tooltip=t("delete"),
                                     icon_color=Colors.DANGER,
                                     on_click=lambda e, s=section_copy: section_panel.open_delete(s),
                                 ),
@@ -237,11 +243,11 @@ def create_admin_screen(
         tables = db.get_all_tables()
         tables_list.controls.clear()
         
-        for t in tables:
-            table_num = t["table_number"]
-            shape = t["shape"]
-            shape_display = TABLE_SHAPES.get(shape, shape)
-            table_copy = dict(t)
+        for tbl in tables:
+            table_num = tbl["table_number"]
+            shape = tbl["shape"]
+            shape_display = get_shape_display(shape)  # Use localized shape name
+            table_copy = dict(tbl)
             
             # Shape indicator
             if shape == "ROUND":
@@ -272,15 +278,15 @@ def create_admin_screen(
                         ft.Row([
                             ft.IconButton(
                                 icon=icons.EDIT,
-                                tooltip="Промени форма",
+                                tooltip=t("change_shape"),
                                 icon_color=Colors.ACCENT_PRIMARY,
-                                on_click=lambda e, t=table_copy: admin_panel.open_table_edit(t),
+                                on_click=lambda e, tbl=table_copy: admin_panel.open_table_edit(tbl),
                             ),
                             ft.IconButton(
                                 icon=icons.DELETE,
-                                tooltip="Изтрий",
+                                tooltip=t("delete"),
                                 icon_color=Colors.DANGER,
-                                on_click=lambda e, t=table_copy: admin_panel.open_table_delete(t),
+                                on_click=lambda e, tbl=table_copy: admin_panel.open_table_delete(tbl),
                             ),
                         ], spacing=0),
                     ],
@@ -305,7 +311,7 @@ def create_admin_screen(
         if not backups:
             backups_list.controls.append(
                 ft.Container(
-                    content=body_text("Няма налични архиви", color=Colors.TEXT_SECONDARY),
+                    content=body_text(t("no_backups"), color=Colors.TEXT_SECONDARY),
                     padding=Spacing.XL,
                     alignment=ft.alignment.center,
                 )
@@ -320,9 +326,9 @@ def create_admin_screen(
                 # Build counts summary
                 counts_parts = []
                 if counts.get("reservations", 0) > 0:
-                    counts_parts.append(f"{counts['reservations']} рез.")
+                    counts_parts.append(f"{counts['reservations']} {t('reservations')[:3]}.")
                 if counts.get("waiters", 0) > 0:
-                    counts_parts.append(f"{counts['waiters']} серв.")
+                    counts_parts.append(f"{counts['waiters']} {t('waiters')[:4]}.")
                 counts_summary = ", ".join(counts_parts) if counts_parts else ""
                 
                 card = glass_container(
@@ -336,7 +342,7 @@ def create_admin_screen(
                                         body_text(timestamp_str, weight=FontWeight.BOLD),
                                     ]),
                                     ft.Row([
-                                        label(f"Размер: {size_str}", color=Colors.TEXT_SECONDARY),
+                                        label(f"{t('size')}: {size_str}", color=Colors.TEXT_SECONDARY),
                                         ft.Container(width=Spacing.MD),
                                         label(counts_summary, color=Colors.TEXT_SECONDARY) if counts_summary else ft.Container(),
                                     ]),
@@ -347,13 +353,13 @@ def create_admin_screen(
                             ft.Row([
                                 ft.IconButton(
                                     icon=icons.RESTORE,
-                                    tooltip="Възстанови",
+                                    tooltip=t("restore"),
                                     icon_color=Colors.WARNING,
                                     on_click=lambda e, b=backup_copy: backup_panel.open_restore(b),
                                 ),
                                 ft.IconButton(
                                     icon=icons.DELETE,
-                                    tooltip="Изтрий",
+                                    tooltip=t("delete"),
                                     icon_color=Colors.DANGER,
                                     on_click=lambda e, b=backup_copy: backup_panel.open_delete(b),
                                 ),
@@ -372,14 +378,14 @@ def create_admin_screen(
         filename = backup_service.create_backup()
         if filename:
             page.snack_bar = ft.SnackBar(
-                ft.Text(f"Архивът е създаден успешно: {filename}", color=Colors.TEXT_PRIMARY),
+                ft.Text(f"{t('backup_created')}: {filename}", color=Colors.TEXT_PRIMARY),
                 bgcolor=Colors.SUCCESS
             )
             page.snack_bar.open = True
             refresh_backups()
         else:
             page.snack_bar = ft.SnackBar(
-                ft.Text("Грешка при създаване на архив", color=Colors.TEXT_PRIMARY),
+                ft.Text(t("backup_error"), color=Colors.TEXT_PRIMARY),
                 bgcolor=Colors.DANGER
             )
             page.snack_bar.open = True
@@ -516,10 +522,10 @@ def create_admin_screen(
             # Header with logout (single exit control)
             ft.Container(
                 content=ft.Row([
-                    heading("Администраторски панел"),
+                    heading(t("admin_panel")),
                     ft.IconButton(
                         icon=icons.LOGOUT,
-                        tooltip="Изход от админ режим",
+                        tooltip=t("logout_admin"),
                         icon_color=Colors.DANGER,
                         icon_size=28,
                         on_click=logout,
@@ -535,20 +541,20 @@ def create_admin_screen(
                     tabs=[
                         # Waiters Tab
                         ft.Tab(
-                            text="Сервитьори",
+                            text=t("waiters"),
                             icon=icons.PERSON,
                             content=ft.Column([
                                 ft.Container(
                                     content=ft.Row([
                                         glass_button(
-                                            "Нов сервитьор",
+                                            t("new_waiter"),
                                             icon=icons.ADD,
                                             on_click=lambda e: admin_panel.open_waiter_create(),
                                             variant="primary",
                                         ),
                                         ft.Container(
                                             content=body_text(
-                                                "Управлявайте сервитьорите на ресторанта.",
+                                                t("manage_waiters_desc"),
                                                 color=Colors.TEXT_SECONDARY,
                                                 size=Typography.SIZE_SM,
                                             ),
@@ -568,20 +574,20 @@ def create_admin_screen(
                         
                         # Sections Tab
                         ft.Tab(
-                            text="Секции",
+                            text=t("sections"),
                             icon=icons.GRID_VIEW,
                             content=ft.Column([
                                 ft.Container(
                                     content=ft.Row([
                                         glass_button(
-                                            "Нова секция",
+                                            t("new_section"),
                                             icon=icons.ADD,
                                             on_click=lambda e: section_panel.open_create(),
                                             variant="primary",
                                         ),
                                         ft.Container(
                                             content=body_text(
-                                                "Секциите групират масите в зони.",
+                                                t("sections_desc"),
                                                 color=Colors.TEXT_SECONDARY,
                                                 size=Typography.SIZE_SM,
                                             ),
@@ -601,20 +607,20 @@ def create_admin_screen(
                         
                         # Tables Tab
                         ft.Tab(
-                            text="Маси",
+                            text=t("tables"),
                             icon=icons.TABLE_RESTAURANT,
                             content=ft.Column([
                                 ft.Container(
                                     content=ft.Row([
                                         glass_button(
-                                            "Добави маса",
+                                            t("add_table"),
                                             icon=icons.ADD,
                                             on_click=lambda e: admin_panel.open_table_create(db.get_next_available_table_number()),
                                             variant="primary",
                                         ),
                                         ft.Container(
                                             content=body_text(
-                                                "Управлявайте масите и техните форми.",
+                                                t("manage_tables_desc"),
                                                 color=Colors.TEXT_SECONDARY,
                                                 size=Typography.SIZE_SM,
                                             ),
@@ -632,22 +638,22 @@ def create_admin_screen(
                             ]),
                         ),
                         
-                        # Backup Tab (NEW - Full Implementation)
+                        # Backup Tab
                         ft.Tab(
-                            text="Архивиране",
+                            text=t("backup"),
                             icon=icons.BACKUP,
                             content=ft.Column([
                                 ft.Container(
                                     content=ft.Row([
                                         glass_button(
-                                            "Архивирай базата",
+                                            t("backup_database"),
                                             icon=icons.BACKUP,
                                             on_click=create_manual_backup,
                                             variant="primary",
                                         ),
                                         ft.Container(
                                             content=body_text(
-                                                "Създавайте и възстановявайте архиви на базата данни.",
+                                                t("backup_desc"),
                                                 color=Colors.TEXT_SECONDARY,
                                                 size=Typography.SIZE_SM,
                                             ),
@@ -667,10 +673,10 @@ def create_admin_screen(
                         
                         # Reports Tab
                         ft.Tab(
-                            text="Отчети",
+                            text=t("reports"),
                             icon=icons.ASSESSMENT,
                             content=ft.Container(
-                                content=body_text("Отчети ще бъдат добавени скоро", color=Colors.TEXT_SECONDARY),
+                                content=body_text(t("reports_coming_soon"), color=Colors.TEXT_SECONDARY),
                                 padding=Spacing.XL,
                             ),
                         ),

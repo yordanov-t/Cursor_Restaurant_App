@@ -236,6 +236,42 @@ def get_animation(duration_ms: int = 300, curve: str = "easeOut"):
 
 
 # ============================================================================
+# UI HELPERS - Cross-version compatible component wrappers
+# ============================================================================
+
+def SizedDropdown(
+    height: int = None,
+    width: int = None,
+    **dropdown_kwargs
+) -> ft.Container:
+    """
+    Create a Dropdown wrapped in a Container for consistent sizing.
+    
+    Flet's Dropdown does not support height= directly in all versions.
+    This helper wraps the Dropdown in a Container to achieve sizing.
+    
+    Args:
+        height: Optional fixed height for the container
+        width: Optional fixed width (passed to both container and dropdown)
+        **dropdown_kwargs: All other arguments passed to ft.Dropdown
+    
+    Returns:
+        ft.Container with the Dropdown inside
+    """
+    # If width provided, pass it to dropdown as well
+    if width is not None:
+        dropdown_kwargs['width'] = width
+    
+    dropdown = ft.Dropdown(**dropdown_kwargs)
+    
+    return ft.Container(
+        content=dropdown,
+        height=height,
+        width=width,
+    )
+
+
+# ============================================================================
 # UTILITY FUNCTIONS
 # ============================================================================
 

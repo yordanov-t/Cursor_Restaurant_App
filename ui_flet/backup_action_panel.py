@@ -4,6 +4,7 @@ Backup Action Panel - Right-side panel for backup/restore operations.
 Provides confirmation UI for:
 - Deleting backups
 - Restoring from backups
+Supports internationalization.
 """
 
 import flet as ft
@@ -11,6 +12,7 @@ from typing import Callable, Optional, Dict, Any
 from enum import Enum
 from ui_flet.theme import Colors, Spacing, Radius, Typography, heading, label, body_text
 from ui_flet.compat import icons, FontWeight
+from ui_flet.i18n import t
 
 
 class BackupPanelMode(Enum):
@@ -74,7 +76,7 @@ class BackupActionPanel:
                     ft.IconButton(
                         icon=icons.CLOSE,
                         icon_color=Colors.TEXT_SECONDARY,
-                        tooltip="Затвори",
+                        tooltip=t("close"),
                         on_click=lambda e: self.close(),
                     ),
                 ],
@@ -87,7 +89,7 @@ class BackupActionPanel:
     def _build_delete_confirm(self) -> ft.Column:
         """Build delete confirmation UI."""
         backup = self.backup_data or {}
-        timestamp_str = backup.get("timestamp_str", "неизвестно")
+        timestamp_str = backup.get("timestamp_str", "")
         size_str = backup.get("size_str", "")
         
         return ft.Column(
@@ -100,7 +102,7 @@ class BackupActionPanel:
                 ),
                 ft.Container(height=Spacing.LG),
                 body_text(
-                    "Сигурни ли сте, че искате да изтриете този архив?",
+                    t("delete_backup_confirm"),
                     size=Typography.SIZE_MD,
                     color=Colors.TEXT_PRIMARY,
                     weight=FontWeight.MEDIUM,
@@ -108,20 +110,20 @@ class BackupActionPanel:
                 ),
                 ft.Container(height=Spacing.MD),
                 body_text(
-                    f"Дата: {timestamp_str}",
+                    f"{t('date')}: {timestamp_str}",
                     size=Typography.SIZE_SM,
                     color=Colors.TEXT_SECONDARY,
                     text_align=ft.TextAlign.CENTER,
                 ),
                 body_text(
-                    f"Размер: {size_str}",
+                    f"{t('size')}: {size_str}",
                     size=Typography.SIZE_SM,
                     color=Colors.TEXT_SECONDARY,
                     text_align=ft.TextAlign.CENTER,
                 ),
                 ft.Container(height=Spacing.SM),
                 body_text(
-                    "Това действие не може да бъде отменено.",
+                    t("action_cannot_be_undone"),
                     size=Typography.SIZE_SM,
                     color=Colors.DANGER,
                     text_align=ft.TextAlign.CENTER,
@@ -130,7 +132,7 @@ class BackupActionPanel:
                 ft.Row(
                     [
                         ft.ElevatedButton(
-                            text="Изтрий",
+                            text=t("delete"),
                             icon=icons.DELETE_FOREVER,
                             bgcolor=Colors.DANGER,
                             color=Colors.TEXT_PRIMARY,
@@ -138,7 +140,7 @@ class BackupActionPanel:
                             expand=True,
                         ),
                         ft.OutlinedButton(
-                            text="Отказ",
+                            text=t("cancel"),
                             icon=icons.CANCEL,
                             on_click=lambda e: self.close(),
                             expand=True,
@@ -154,22 +156,22 @@ class BackupActionPanel:
     def _build_restore_confirm(self) -> ft.Column:
         """Build restore confirmation UI."""
         backup = self.backup_data or {}
-        timestamp_str = backup.get("timestamp_str", "неизвестно")
+        timestamp_str = backup.get("timestamp_str", "")
         size_str = backup.get("size_str", "")
         counts = backup.get("counts", {})
         
         # Build counts display
         counts_items = []
         if counts.get("reservations", 0) > 0:
-            counts_items.append(f"Резервации: {counts['reservations']}")
+            counts_items.append(f"{t('reservations')}: {counts['reservations']}")
         if counts.get("waiters", 0) > 0:
-            counts_items.append(f"Сервитьори: {counts['waiters']}")
+            counts_items.append(f"{t('waiters')}: {counts['waiters']}")
         if counts.get("tables", 0) > 0:
-            counts_items.append(f"Маси: {counts['tables']}")
+            counts_items.append(f"{t('tables')}: {counts['tables']}")
         if counts.get("sections", 0) > 0:
-            counts_items.append(f"Секции: {counts['sections']}")
+            counts_items.append(f"{t('sections')}: {counts['sections']}")
         
-        counts_text = ", ".join(counts_items) if counts_items else "Без данни"
+        counts_text = ", ".join(counts_items) if counts_items else ""
         
         return ft.Column(
             [
@@ -181,7 +183,7 @@ class BackupActionPanel:
                 ),
                 ft.Container(height=Spacing.LG),
                 body_text(
-                    "Възстановяване на база данни",
+                    t("restore_backup"),
                     size=Typography.SIZE_LG,
                     color=Colors.TEXT_PRIMARY,
                     weight=FontWeight.BOLD,
@@ -191,13 +193,13 @@ class BackupActionPanel:
                 ft.Container(
                     content=ft.Column([
                         body_text(
-                            f"Архив от: {timestamp_str}",
+                            f"{t('date')}: {timestamp_str}",
                             size=Typography.SIZE_SM,
                             color=Colors.TEXT_SECONDARY,
                             text_align=ft.TextAlign.CENTER,
                         ),
                         body_text(
-                            f"Размер: {size_str}",
+                            f"{t('size')}: {size_str}",
                             size=Typography.SIZE_SM,
                             color=Colors.TEXT_SECONDARY,
                             text_align=ft.TextAlign.CENTER,
@@ -207,7 +209,7 @@ class BackupActionPanel:
                             size=Typography.SIZE_SM,
                             color=Colors.TEXT_SECONDARY,
                             text_align=ft.TextAlign.CENTER,
-                        ),
+                        ) if counts_text else ft.Container(),
                     ], spacing=4, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                     bgcolor=Colors.SURFACE_GLASS,
                     border=ft.border.all(1, Colors.BORDER),
@@ -220,23 +222,16 @@ class BackupActionPanel:
                         ft.Icon(icons.WARNING, color=Colors.WARNING, size=24),
                         ft.Container(height=Spacing.XS),
                         body_text(
-                            "ВНИМАНИЕ!",
+                            t("warning"),
                             size=Typography.SIZE_MD,
                             color=Colors.WARNING,
                             weight=FontWeight.BOLD,
                             text_align=ft.TextAlign.CENTER,
                         ),
                         body_text(
-                            "Това ще върне базата към състояние от избрания архив.",
+                            t("restore_warning"),
                             size=Typography.SIZE_SM,
                             color=Colors.TEXT_PRIMARY,
-                            text_align=ft.TextAlign.CENTER,
-                        ),
-                        body_text(
-                            "Текущите данни ще бъдат заменени!",
-                            size=Typography.SIZE_SM,
-                            color=Colors.DANGER,
-                            weight=FontWeight.BOLD,
                             text_align=ft.TextAlign.CENTER,
                         ),
                     ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=2),
@@ -249,7 +244,7 @@ class BackupActionPanel:
                 ft.Row(
                     [
                         ft.ElevatedButton(
-                            text="Възстанови",
+                            text=t("restore"),
                             icon=icons.RESTORE,
                             bgcolor=Colors.WARNING,
                             color=Colors.TEXT_PRIMARY,
@@ -257,7 +252,7 @@ class BackupActionPanel:
                             expand=True,
                         ),
                         ft.OutlinedButton(
-                            text="Отказ",
+                            text=t("cancel"),
                             icon=icons.CANCEL,
                             on_click=lambda e: self.close(),
                             expand=True,
@@ -278,9 +273,9 @@ class BackupActionPanel:
             if filename:
                 success = self.on_delete(filename)
                 if success:
-                    self._show_success("Архивът е изтрит успешно")
+                    self._show_success(t("backup_deleted"))
                 else:
-                    self._show_error("Грешка при изтриване на архива")
+                    self._show_error(t("error"))
         self.close()
     
     def _handle_restore(self):
@@ -288,14 +283,11 @@ class BackupActionPanel:
         if self.backup_data:
             filename = self.backup_data.get("filename")
             if filename:
-                # Show progress
-                self._show_progress("Възстановяване...")
-                
                 success = self.on_restore(filename)
                 if success:
-                    self._show_success("Базата данни е възстановена успешно!")
+                    self._show_success(t("backup_restored"))
                 else:
-                    self._show_error("Грешка при възстановяване на базата данни")
+                    self._show_error(t("error"))
         self.close()
     
     def _show_error(self, message: str):
@@ -316,20 +308,6 @@ class BackupActionPanel:
         self.page.snack_bar.open = True
         self.page.update()
     
-    def _show_progress(self, message: str):
-        """Show progress snackbar."""
-        self.page.snack_bar = ft.SnackBar(
-            ft.Row([
-                ft.ProgressRing(width=20, height=20, color=Colors.ACCENT_PRIMARY),
-                ft.Container(width=Spacing.SM),
-                ft.Text(message, color=Colors.TEXT_PRIMARY),
-            ]),
-            bgcolor=Colors.SURFACE,
-            duration=10000,  # Long duration
-        )
-        self.page.snack_bar.open = True
-        self.page.update()
-    
     def open_delete(self, backup: Dict[str, Any]):
         """Open panel in delete mode."""
         self.mode = BackupPanelMode.DELETE
@@ -337,7 +315,7 @@ class BackupActionPanel:
         
         # Build panel
         self.panel_content.controls.clear()
-        self.panel_content.controls.append(self._build_header("Изтриване на архив"))
+        self.panel_content.controls.append(self._build_header(t("delete_backup")))
         confirm_ui = self._build_delete_confirm()
         self.panel_content.controls.append(
             ft.Container(content=confirm_ui, padding=Spacing.LG, expand=True)
@@ -354,7 +332,7 @@ class BackupActionPanel:
         
         # Build panel
         self.panel_content.controls.clear()
-        self.panel_content.controls.append(self._build_header("Възстановяване"))
+        self.panel_content.controls.append(self._build_header(t("restore_backup")))
         confirm_ui = self._build_restore_confirm()
         self.panel_content.controls.append(
             ft.Container(content=confirm_ui, padding=Spacing.LG, expand=True)
@@ -377,4 +355,3 @@ class BackupActionPanel:
     def is_open(self) -> bool:
         """Check if panel is open."""
         return self.mode != BackupPanelMode.HIDDEN
-

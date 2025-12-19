@@ -5,6 +5,7 @@ Features:
 - Left sidebar (~20%) with filters and navigation
 - Right content (~80%) with reservations list and action panel
 - Single "Дата" calendar picker filter (replaces Month/Day)
+- Internationalization support
 """
 
 import flet as ft
@@ -16,13 +17,7 @@ from ui_flet.theme import (Colors, Spacing, Radius, Typography, glass_container,
                              glass_button, heading, label, body_text)
 from ui_flet.compat import icons, FontWeight, ScrollMode
 from ui_flet.action_panel import ActionPanel
-
-
-# Bulgarian constants
-BULGARIAN_MONTHS = [
-    "Януари", "Февруари", "Март", "Април", "Май", "Юни",
-    "Юли", "Август", "Септември", "Октомври", "Ноември", "Декември"
-]
+from ui_flet.i18n import t, get_month_name
 
 
 def create_reservations_screen(
@@ -52,9 +47,9 @@ def create_reservations_screen(
         return ""
     
     def get_date_display():
-        """Get the current filter date for display."""
+        """Get the current filter date for display (localized)."""
         d = app_state.filter_date
-        month_name = BULGARIAN_MONTHS[d.month - 1]
+        month_name = get_month_name(d.month)
         return f"{d.day} {month_name} {d.year}"
     
     def refresh_reservations():
@@ -68,12 +63,15 @@ def create_reservations_screen(
         
         # Convert status filter
         status_filter = None
-        if app_state.selected_status != "Всички":
-            status_filter = "Reserved" if app_state.selected_status == "Резервирана" else "Cancelled"
+        if app_state.selected_status != "Всички" and app_state.selected_status != t("all"):
+            if app_state.selected_status == "Резервирана" or app_state.selected_status == t("reserved"):
+                status_filter = "Reserved"
+            else:
+                status_filter = "Cancelled"
         
         # Convert table filter
         table_filter = None
-        if app_state.selected_table != "Всички":
+        if app_state.selected_table != "Всички" and app_state.selected_table != t("all"):
             try:
                 table_filter = int(app_state.selected_table)
             except:
@@ -96,7 +94,7 @@ def create_reservations_screen(
         if not reservations:
             reservations_list.controls.append(
                 ft.Container(
-                    content=body_text("Няма резервации за избраните филтри", color=Colors.TEXT_SECONDARY),
+                    content=body_text(t("no_reservations"), color=Colors.TEXT_SECONDARY),
                     padding=Spacing.XL,
                     alignment=ft.alignment.center,
                 )
@@ -104,7 +102,7 @@ def create_reservations_screen(
         else:
             for res in reservations:
                 # Status display
-                status_display = "Резервирана" if res["status"] == "Reserved" else "Отменена"
+                status_display = t("reserved") if res["status"] == "Reserved" else t("cancelled")
                 status_color = Colors.SUCCESS if res["status"] == "Reserved" else Colors.DANGER
                 
                 # Build reservation card (with correct closure for res_id)
@@ -125,7 +123,7 @@ def create_reservations_screen(
                     ft.Container(
                         content=ft.Column(
                             [
-                                label("Час", color=Colors.TEXT_SECONDARY),
+                                label(t("time"), color=Colors.TEXT_SECONDARY),
                                 body_text(res["time_slot"], weight=FontWeight.MEDIUM),
                             ],
                             spacing=2,
@@ -136,7 +134,7 @@ def create_reservations_screen(
                     ft.Container(
                         content=ft.Column(
                             [
-                                label("Клиент", color=Colors.TEXT_SECONDARY),
+                                label(t("customer"), color=Colors.TEXT_SECONDARY),
                                 body_text(res["customer_name"], weight=FontWeight.MEDIUM),
                             ],
                             spacing=2,
@@ -147,7 +145,7 @@ def create_reservations_screen(
                     ft.Container(
                         content=ft.Column(
                             [
-                                label("Телефон", color=Colors.TEXT_SECONDARY),
+                                label(t("phone"), color=Colors.TEXT_SECONDARY),
                                 body_text(res["phone_number"] or "-"),
                             ],
                             spacing=2,
@@ -158,18 +156,18 @@ def create_reservations_screen(
                     ft.Container(
                         content=ft.Column(
                             [
-                                label("Сервитьор", color=Colors.TEXT_SECONDARY),
+                                label(t("waiter"), color=Colors.TEXT_SECONDARY),
                                 body_text(get_waiter_name(res.get("waiter_id"))),
                             ],
                             spacing=2,
                         ),
                         width=100,
                     ),
-                    # Notes (Бележки) - show if exists
+                    # Notes
                     ft.Container(
                         content=ft.Column(
                             [
-                                label("Бележки", color=Colors.TEXT_SECONDARY),
+                                label(t("notes"), color=Colors.TEXT_SECONDARY),
                                 body_text(
                                     notes_text if notes_text else "-",
                                     size=Typography.SIZE_SM,
@@ -179,7 +177,7 @@ def create_reservations_screen(
                             spacing=2,
                         ),
                         width=120,
-                        visible=True,  # Always show the column for consistency
+                        visible=True,
                     ),
                     # Status
                     ft.Container(
@@ -197,13 +195,13 @@ def create_reservations_screen(
                             ft.IconButton(
                                 icon=icons.EDIT,
                                 icon_color=Colors.ACCENT_PRIMARY,
-                                tooltip="Редактирай",
+                                tooltip=t("edit"),
                                 on_click=lambda e, r=res_copy: action_panel.open_edit(r),
                             ),
                             ft.IconButton(
                                 icon=icons.DELETE,
                                 icon_color=Colors.DANGER,
-                                tooltip="Изтрий",
+                                tooltip=t("delete"),
                                 on_click=lambda e, r=res_copy: action_panel.open_delete(r),
                             ),
                         ],
@@ -239,7 +237,7 @@ def create_reservations_screen(
                     waiter_id=data["waiter_id"],
                     status="Reserved"
                 )
-                message = "Резервацията е обновена"
+                message = t("reservation_updated")
             else:
                 # Create new
                 success = reservation_service.create_reservation(
@@ -250,7 +248,7 @@ def create_reservations_screen(
                     additional_info=data["notes"],
                     waiter_id=data["waiter_id"]
                 )
-                message = "Резервацията е създадена"
+                message = t("reservation_created")
             
             if success:
                 refresh_reservations()
@@ -262,14 +260,14 @@ def create_reservations_screen(
                 page.snack_bar.open = True
             else:
                 page.snack_bar = ft.SnackBar(
-                    ft.Text("Грешка: Препокриване с друга резервация", color=Colors.TEXT_PRIMARY),
+                    ft.Text(t("error_overlap"), color=Colors.TEXT_PRIMARY),
                     bgcolor=Colors.DANGER
                 )
                 page.snack_bar.open = True
             page.update()
         except Exception as ex:
             page.snack_bar = ft.SnackBar(
-                ft.Text(f"Грешка: {str(ex)}", color=Colors.TEXT_PRIMARY),
+                ft.Text(f"{t('error')}: {str(ex)}", color=Colors.TEXT_PRIMARY),
                 bgcolor=Colors.DANGER
             )
             page.snack_bar.open = True
@@ -281,7 +279,7 @@ def create_reservations_screen(
         refresh_reservations()
         refresh_callback()
         page.snack_bar = ft.SnackBar(
-            ft.Text("Резервацията е отменена", color=Colors.TEXT_PRIMARY),
+            ft.Text(t("reservation_cancelled"), color=Colors.TEXT_PRIMARY),
             bgcolor=Colors.SUCCESS
         )
         page.snack_bar.open = True
@@ -357,9 +355,9 @@ def create_reservations_screen(
     # ==========================================
     
     hour_dropdown = ft.Dropdown(
-        label="Час",
+        label=t("hour"),
         value=app_state.selected_hour,
-        options=[ft.dropdown.Option("Всички")] + [ft.dropdown.Option(f"{h:02d}") for h in range(24)],
+        options=[ft.dropdown.Option(t("all"))] + [ft.dropdown.Option(f"{h:02d}") for h in range(24)],
         on_change=lambda e: app_state.update_filter(selected_hour=e.control.value) or refresh_reservations(),
         width=None,
         text_size=Typography.SIZE_SM,
@@ -369,7 +367,7 @@ def create_reservations_screen(
     )
     
     minute_dropdown = ft.Dropdown(
-        label="Минути",
+        label=t("minutes"),
         value=app_state.selected_minute,
         options=[ft.dropdown.Option(m) for m in ["00", "15", "30", "45"]],
         on_change=lambda e: app_state.update_filter(selected_minute=e.control.value) or refresh_reservations(),
@@ -381,12 +379,12 @@ def create_reservations_screen(
     )
     
     status_dropdown = ft.Dropdown(
-        label="Статус",
+        label=t("status"),
         value=app_state.selected_status,
         options=[
-            ft.dropdown.Option("Всички"),
-            ft.dropdown.Option("Резервирана"),
-            ft.dropdown.Option("Отменена"),
+            ft.dropdown.Option(t("all")),
+            ft.dropdown.Option(t("reserved")),
+            ft.dropdown.Option(t("cancelled")),
         ],
         on_change=lambda e: app_state.update_filter(selected_status=e.control.value) or refresh_reservations(),
         width=None,
@@ -397,9 +395,9 @@ def create_reservations_screen(
     )
     
     table_dropdown = ft.Dropdown(
-        label="Маса",
+        label=t("table"),
         value=app_state.selected_table,
-        options=[ft.dropdown.Option("Всички")] + [ft.dropdown.Option(str(i)) for i in range(1, 51)],
+        options=[ft.dropdown.Option(t("all"))] + [ft.dropdown.Option(str(i)) for i in range(1, 51)],
         on_change=lambda e: app_state.update_filter(selected_table=e.control.value) or refresh_reservations(),
         width=None,
         text_size=Typography.SIZE_SM,
@@ -417,13 +415,13 @@ def create_reservations_screen(
             content=ft.Column(
                 [
                     # Title
-                    heading("Филтри", size=Typography.SIZE_LG, weight=FontWeight.BOLD),
+                    heading(t("filters"), size=Typography.SIZE_LG, weight=FontWeight.BOLD),
                     ft.Divider(height=1, color=Colors.BORDER),
                     
                     # Date picker
                     ft.Container(
                         content=ft.Column([
-                            label("Дата", color=Colors.TEXT_SECONDARY),
+                            label(t("date"), color=Colors.TEXT_SECONDARY),
                             date_picker_field,
                         ], spacing=4),
                         padding=ft.padding.only(top=Spacing.SM),
@@ -434,7 +432,7 @@ def create_reservations_screen(
                     # Time filters (hour + minute)
                     ft.Container(
                         content=ft.Column([
-                            label("Час", color=Colors.TEXT_SECONDARY),
+                            label(t("hour"), color=Colors.TEXT_SECONDARY),
                             ft.Row([
                                 ft.Container(content=hour_dropdown, expand=True),
                                 ft.Container(content=minute_dropdown, expand=True),
@@ -458,7 +456,7 @@ def create_reservations_screen(
                     
                     # Create reservation button
                     glass_button(
-                        "Създай резервация",
+                        t("create_reservation"),
                         icon=icons.ADD,
                         on_click=lambda e: action_panel.open_create(app_state),
                         variant="primary",
@@ -469,7 +467,7 @@ def create_reservations_screen(
                     
                     # Navigation to table layout
                     glass_button(
-                        "Разпределение →",
+                        t("to_layout"),
                         icon=icons.TABLE_CHART,
                         on_click=lambda e: app_state.navigate_to("table_layout"),
                         variant="secondary",
@@ -493,7 +491,7 @@ def create_reservations_screen(
         [
             # Header
             ft.Container(
-                content=heading("Резервации", size=Typography.SIZE_XL, weight=FontWeight.BOLD),
+                content=heading(t("reservations"), size=Typography.SIZE_XL, weight=FontWeight.BOLD),
                 padding=ft.padding.only(left=Spacing.LG, top=Spacing.MD, bottom=Spacing.SM),
             ),
             # Reservations list

@@ -2,6 +2,7 @@
 Flet UI for Restaurant Management System - Glassmorphism Edition.
 
 Modern, professional UI using Flet framework with full functional parity.
+Includes internationalization support for Bulgarian, English, French, and Russian.
 """
 
 import flet as ft
@@ -9,7 +10,8 @@ from db import DBManager
 from core import ReservationService, TableLayoutService, BackupService
 from ui_flet.compat import log_compatibility_info, icons, ThemeMode, Colors as CompatColors
 from ui_flet.app_state import AppState
-from ui_flet.theme import Colors
+from ui_flet.theme import Colors, Spacing, Radius
+from ui_flet.i18n import t, get_flag, get_available_languages, LANGUAGES
 
 
 def main(page: ft.Page):
@@ -49,8 +51,8 @@ def main(page: ft.Page):
     # Initialize application state
     app_state = AppState()
     
-    # Page configuration
-    page.title = "Ресторант Хъшове"
+    # Page configuration - title will be updated dynamically
+    page.title = t("app_title")
     page.theme_mode = ThemeMode.DARK
     
     # Gradient background (elegant blue-to-purple)
@@ -79,10 +81,41 @@ def main(page: ft.Page):
     # Main content container
     main_container = ft.Container(expand=True)
     
-    # Admin button (top-right)
+    # ==========================================
+    # Language Switcher (Top-Left, flags only)
+    # ==========================================
+    
+    def on_language_change(e):
+        """Handle language change from dropdown."""
+        new_lang = e.control.value
+        if new_lang:
+            app_state.language = new_lang
+            # Update page title
+            page.title = t("app_title")
+            # Full UI refresh happens via app_state.on_state_change
+    
+    # Build language dropdown options with flags only
+    language_options = [
+        ft.dropdown.Option(key=lang_code, text=flag)
+        for lang_code, flag in LANGUAGES.items()
+    ]
+    
+    language_dropdown = ft.Dropdown(
+        value=app_state.language,
+        options=language_options,
+        on_change=on_language_change,
+        width=90,  # Wider to accommodate EN text and flags
+        content_padding=ft.padding.symmetric(horizontal=8, vertical=4),
+        border_color=Colors.BORDER,
+        bgcolor=Colors.SURFACE_GLASS,
+        focused_border_color=Colors.ACCENT_PRIMARY,
+    )
+    
+    # Admin button (top-right) - will NOT be shown when admin is logged in
+    # (the admin screen has its own logout button)
     admin_button = ft.IconButton(
-        icon=icons.ADMIN_PANEL_SETTINGS if not app_state.admin_logged_in else icons.LOGOUT,
-        tooltip="Админ" if not app_state.admin_logged_in else "Изход от админ режим",
+        icon=icons.ADMIN_PANEL_SETTINGS,
+        tooltip=t("admin"),
         icon_color=Colors.TEXT_PRIMARY,
         on_click=lambda e: toggle_admin()
     )
@@ -98,9 +131,16 @@ def main(page: ft.Page):
     
     def refresh_screen():
         """Refresh the current screen based on app state."""
-        # Update admin button
-        admin_button.icon = icons.LOGOUT if app_state.admin_logged_in else icons.ADMIN_PANEL_SETTINGS
-        admin_button.tooltip = "Изход от админ режим" if app_state.admin_logged_in else "Админ"
+        # Update language dropdown value
+        language_dropdown.value = app_state.language
+        
+        # Update admin button visibility and tooltip
+        # Hide admin button when in admin screen (admin has its own logout)
+        admin_button.visible = app_state.current_screen != "admin"
+        admin_button.tooltip = t("admin")
+        
+        # Update page title
+        page.title = t("app_title")
         
         # Load appropriate screen
         if app_state.current_screen == "reservations":
@@ -121,18 +161,24 @@ def main(page: ft.Page):
     # Set state change callback
     app_state.on_state_change = refresh_screen
     
-    # Build page layout
+    # Build page layout with language switcher on the left
     page.add(
         ft.Column(
             [
-                # Top bar with admin button
+                # Top bar with language switcher (left) and admin button (right)
                 ft.Container(
                     content=ft.Row(
                         [
+                            # Language switcher on the left
+                            ft.Container(
+                                content=language_dropdown,
+                                padding=ft.padding.only(left=16),
+                            ),
                             ft.Container(expand=True),  # Spacer
+                            # Admin button on the right
                             admin_button,
                         ],
-                        alignment=ft.MainAxisAlignment.END,
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                     ),
                     padding=ft.padding.only(right=16, top=8),
                 ),

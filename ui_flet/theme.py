@@ -47,9 +47,18 @@ class Colors:
     TABLE_OCCUPIED = "#EF4444"  # Red
     TABLE_SOON = "#F59E0B"  # Orange
     
+    # Table selected states (darker for highlight)
+    TABLE_FREE_SELECTED = "#0D9668"  # Darker green
+    TABLE_OCCUPIED_SELECTED = "#B91C1C"  # Darker red
+    TABLE_SOON_SELECTED = "#D97706"  # Darker orange
+    
+    # Surface variants
+    SURFACE_ELEVATED = "#1F2937"  # Elevated surface (slightly lighter than SURFACE)
+    
     # Borders & overlays
     BORDER = "rgba(255, 255, 255, 0.1)"
     BORDER_FOCUS = "rgba(59, 130, 246, 0.5)"
+    BORDER_SELECTED = "rgba(255, 255, 255, 0.4)"  # Stronger border for selected items
     OVERLAY = "rgba(0, 0, 0, 0.5)"
 
 

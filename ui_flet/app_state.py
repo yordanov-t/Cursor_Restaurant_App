@@ -1,11 +1,12 @@
 """
 Application state management for Flet UI.
 
-Centralized state for filters, reservations, and navigation.
+Centralized state for filters, reservations, navigation, and language.
 """
 
 from datetime import date, datetime
 from typing import Optional, Callable, List, Dict, Any
+from ui_flet.i18n import get_current_language, set_language as i18n_set_language
 
 
 class AppState:
@@ -18,6 +19,7 @@ class AppState:
     - Current table states
     - Navigation state
     - Admin state
+    - Language state
     """
     
     def __init__(self):
@@ -42,6 +44,9 @@ class AppState:
         # Admin
         self.admin_logged_in = False
         
+        # Language - load from i18n module (persisted)
+        self._language = get_current_language()
+        
         # Callbacks for UI refresh
         self.on_state_change: Optional[Callable] = None
     
@@ -58,24 +63,47 @@ class AppState:
         return self._get_month_bulgarian(date.today().month)
     
     @property
+    def language(self) -> str:
+        """Get current language code."""
+        return self._language
+    
+    @language.setter
+    def language(self, lang: str):
+        """Set current language and trigger UI refresh."""
+        self._language = lang
+        i18n_set_language(lang)
+        if self.on_state_change:
+            self.on_state_change()
+    
+    @property
     def filter_date(self) -> date:
         """Get the selected filter date."""
         return self._selected_date
     
     @filter_date.setter
-    def filter_date(self, value: date):
-        """Set the filter date and sync legacy fields."""
+    def filter_date(self, value):
+        """Set the filter date and sync legacy fields.
+        
+        Accepts both date and datetime objects - converts datetime to date.
+        """
+        # Handle datetime input (e.g., from DatePicker)
+        if isinstance(value, datetime):
+            value = value.date()
+        
         self._selected_date = value
         # Sync legacy month/day fields for table layout screen
         self.selected_month = self._get_month_bulgarian(value.month)
         self.selected_day = str(value.day)
     
-    def get_selected_date(self):
+    def get_selected_date(self) -> date:
         """
         Get selected date (without time).
         
-        Returns the filter date directly.
+        Returns the filter date as a date object.
         """
+        # Ensure we always return a date object
+        if isinstance(self._selected_date, datetime):
+            return self._selected_date.date()
         return self._selected_date
     
     def get_selected_datetime(self):

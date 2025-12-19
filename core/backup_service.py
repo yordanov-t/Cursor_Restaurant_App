@@ -25,6 +25,8 @@ class BackupService:
     - Delete backups
     - Atomic restore with safety checks
     - Daily auto-backup on startup
+    
+    Thread-safe: Uses file-based operations, not SQLite connection-based backup.
     """
     
     BACKUP_FOLDER = "backups"
@@ -151,6 +153,8 @@ class BackupService:
         """
         Create a new backup of the current database.
         
+        Uses file copy for thread-safety (no connection needed).
+        
         Returns:
             Backup filename if successful, None otherwise.
         """
@@ -162,12 +166,8 @@ class BackupService:
             filename = self._generate_backup_filename()
             filepath = self._get_backup_path(filename)
             
-            # Commit any pending transactions
-            self.db_manager.conn.commit()
-            
-            # Create backup using SQLite backup API
-            with sqlite3.connect(filepath) as backup_conn:
-                self.db_manager.conn.backup(backup_conn)
+            # Create backup using file copy (thread-safe)
+            shutil.copy2(self.db_name, filepath)
             
             return filename
         except Exception as e:
@@ -228,10 +228,11 @@ class BackupService:
         
         This is an atomic operation:
         1. Verify backup file exists and is valid
-        2. Close current DB connection
-        3. Create a safety backup of current DB
-        4. Copy backup over current DB
-        5. Reopen connection
+        2. Create a safety backup of current DB
+        3. Copy backup over current DB (using temp file for atomicity)
+        4. Reinitialize DB manager
+        
+        Thread-safe: Uses file operations, not connection-based restore.
         
         Args:
             filename: Name of the backup file to restore.
@@ -263,15 +264,7 @@ class BackupService:
             # Create safety backup of current state
             safety_backup = f"_pre_restore_safety_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
             safety_path = self._get_backup_path(safety_backup)
-            self.db_manager.conn.commit()
-            with sqlite3.connect(safety_path) as backup_conn:
-                self.db_manager.conn.backup(backup_conn)
-            
-            if on_progress:
-                on_progress("Затваряне на връзката...")
-            
-            # Close current connection
-            self.db_manager.conn.close()
+            shutil.copy2(self.db_name, safety_path)
             
             if on_progress:
                 on_progress("Възстановяване на данните...")
@@ -286,13 +279,9 @@ class BackupService:
             os.rename(temp_path, self.db_name)
             
             if on_progress:
-                on_progress("Отваряне на новата база...")
+                on_progress("Инициализиране...")
             
-            # Reopen connection
-            self.db_manager.conn = sqlite3.connect(self.db_name)
-            self.db_manager.conn.row_factory = sqlite3.Row
-            
-            # Reinitialize (ensure schema is up to date)
+            # Reinitialize DB manager (ensures schema is up to date)
             self.db_manager.initialize_db()
             
             if on_progress:
@@ -302,14 +291,6 @@ class BackupService:
             
         except Exception as e:
             print(f"Restore failed: {e}")
-            
-            # Try to reopen connection even on failure
-            try:
-                self.db_manager.conn = sqlite3.connect(self.db_name)
-                self.db_manager.conn.row_factory = sqlite3.Row
-            except:
-                pass
-            
             return False
     
     def has_today_backup(self) -> bool:
@@ -356,4 +337,3 @@ class BackupService:
                 deleted += 1
         
         return deleted
-

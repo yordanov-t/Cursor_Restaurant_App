@@ -2,6 +2,7 @@
 Action Panel - Right-side animated panel for Create/Edit/Delete actions.
 
 Replaces popups with a smooth slide-in panel from the right.
+Supports internationalization.
 """
 
 import flet as ft
@@ -10,6 +11,7 @@ from typing import Callable, Optional, Dict, Any
 from enum import Enum
 from ui_flet.theme import Colors, Spacing, Radius, Typography, heading, label, body_text
 from ui_flet.compat import icons, FontWeight
+from ui_flet.i18n import t
 
 
 class PanelMode(Enum):
@@ -18,6 +20,7 @@ class PanelMode(Enum):
     CREATE = "create"
     EDIT = "edit"
     DELETE = "delete"
+    VIEW = "view"  # Read-only view of reservation details
 
 
 class ActionPanel:
@@ -85,7 +88,7 @@ class ActionPanel:
                     ft.IconButton(
                         icon=icons.CLOSE,
                         icon_color=Colors.TEXT_SECONDARY,
-                        tooltip="Затвори",
+                        tooltip=t("close"),
                         on_click=lambda e: self.close(),
                     ),
                 ],
@@ -103,8 +106,8 @@ class ActionPanel:
         
         # Table dropdown
         self.table_dropdown = ft.Dropdown(
-            label="Маса",
-            options=[ft.dropdown.Option(text=f"Маса {i}", key=str(i)) for i in range(1, 51)],
+            label=t("table"),
+            options=[ft.dropdown.Option(text=f"{t('table')} {i}", key=str(i)) for i in range(1, 51)],
             width=None,
             bgcolor=Colors.SURFACE_GLASS,
             border_color=Colors.BORDER,
@@ -113,8 +116,8 @@ class ActionPanel:
         
         # Date field with calendar picker
         self.date_field = ft.TextField(
-            label="Дата",
-            hint_text="Изберете дата",
+            label=t("date"),
+            hint_text=t("select_date"),
             width=None,
             bgcolor=Colors.SURFACE_GLASS,
             border_color=Colors.BORDER,
@@ -124,14 +127,14 @@ class ActionPanel:
             suffix=ft.IconButton(
                 icon=icons.CALENDAR_TODAY,
                 icon_color=Colors.ACCENT_PRIMARY,
-                tooltip="Изберете дата",
+                tooltip=t("select_date"),
                 on_click=lambda e: self._open_date_picker(),
             ),
         )
         
         # Hour dropdown (00-23)
         self.hour_dropdown = ft.Dropdown(
-            label="Час",
+            label=t("hour"),
             options=[ft.dropdown.Option(text=f"{h:02d}", key=f"{h:02d}") for h in range(24)],
             width=None,
             bgcolor=Colors.SURFACE_GLASS,
@@ -142,7 +145,7 @@ class ActionPanel:
         
         # Minute dropdown (00, 15, 30, 45)
         self.minute_dropdown = ft.Dropdown(
-            label="Минути",
+            label=t("minutes"),
             options=[ft.dropdown.Option(text=m, key=m) for m in ["00", "15", "30", "45"]],
             width=None,
             bgcolor=Colors.SURFACE_GLASS,
@@ -153,7 +156,7 @@ class ActionPanel:
         
         # Customer name
         self.customer_name_field = ft.TextField(
-            label="Име на клиент",
+            label=t("customer_name"),
             width=None,
             bgcolor=Colors.SURFACE_GLASS,
             border_color=Colors.BORDER,
@@ -162,7 +165,7 @@ class ActionPanel:
         
         # Phone
         self.phone_field = ft.TextField(
-            label="Телефон",
+            label=t("phone"),
             width=None,
             bgcolor=Colors.SURFACE_GLASS,
             border_color=Colors.BORDER,
@@ -171,7 +174,7 @@ class ActionPanel:
         
         # Notes
         self.notes_field = ft.TextField(
-            label="Бележки",
+            label=t("notes"),
             multiline=True,
             min_lines=3,
             max_lines=5,
@@ -183,7 +186,7 @@ class ActionPanel:
         
         # Waiter dropdown
         self.waiter_dropdown = ft.Dropdown(
-            label="Сервитьор",
+            label=t("waiter"),
             options=waiter_options,
             width=None,
             bgcolor=Colors.SURFACE_GLASS,
@@ -193,7 +196,7 @@ class ActionPanel:
         
         # Buttons
         save_button = ft.ElevatedButton(
-            text="Запази",
+            text=t("save"),
             icon=icons.SAVE,
             bgcolor=Colors.SUCCESS,
             color=Colors.TEXT_PRIMARY,
@@ -202,7 +205,7 @@ class ActionPanel:
         )
         
         cancel_button = ft.OutlinedButton(
-            text="Отказ",
+            text=t("cancel"),
             icon=icons.CANCEL,
             on_click=lambda e: self.close(),
             expand=True,
@@ -224,7 +227,7 @@ class ActionPanel:
                 ft.Container(height=Spacing.SM),
                 self.date_field,
                 ft.Container(height=Spacing.SM),
-                label("Час", color=Colors.TEXT_SECONDARY),
+                label(t("hour"), color=Colors.TEXT_SECONDARY),
                 time_row,
                 ft.Container(height=Spacing.SM),
                 self.customer_name_field,
@@ -256,14 +259,14 @@ class ActionPanel:
                 ),
                 ft.Container(height=Spacing.LG),
                 body_text(
-                    "Сигурни ли сте, че искате да изтриете тази резервация?",
+                    t("delete_reservation_confirm"),
                     size=Typography.SIZE_MD,
                     color=Colors.TEXT_PRIMARY,
                     weight=FontWeight.MEDIUM,
                 ),
                 ft.Container(height=Spacing.SM),
                 body_text(
-                    "Това действие не може да бъде отменено.",
+                    t("action_cannot_be_undone"),
                     size=Typography.SIZE_SM,
                     color=Colors.TEXT_SECONDARY,
                 ),
@@ -271,7 +274,7 @@ class ActionPanel:
                 ft.Row(
                     [
                         ft.ElevatedButton(
-                            text="Изтрий",
+                            text=t("delete"),
                             icon=icons.DELETE_FOREVER,
                             bgcolor=Colors.DANGER,
                             color=Colors.TEXT_PRIMARY,
@@ -279,7 +282,7 @@ class ActionPanel:
                             expand=True,
                         ),
                         ft.OutlinedButton(
-                            text="Отказ",
+                            text=t("cancel"),
                             icon=icons.CANCEL,
                             on_click=lambda e: self.close(),
                             expand=True,
@@ -292,23 +295,148 @@ class ActionPanel:
             expand=True,
         )
     
+    def _build_view_details(self, waiter_name: str = "") -> ft.Column:
+        """Build read-only reservation details view."""
+        from ui_flet.i18n import get_month_name
+        
+        data = self.reservation_data
+        if not data:
+            return ft.Column([body_text(t("error"))])
+        
+        # Parse time slot for display
+        time_display = data.get("time_slot", "")
+        date_display = ""
+        try:
+            dt = datetime.strptime(data["time_slot"], "%Y-%m-%d %H:%M")
+            month_name = get_month_name(dt.month)
+            date_display = f"{dt.day} {month_name} {dt.year}"
+            time_display = dt.strftime("%H:%M")
+        except:
+            pass
+        
+        # Calculate end time (90 min duration)
+        duration_display = f"90 {t('minutes_abbr')}"
+        
+        # Status
+        status = data.get("status", "Reserved")
+        status_display = t("reserved") if status == "Reserved" else t("cancelled")
+        status_color = Colors.SUCCESS if status == "Reserved" else Colors.DANGER
+        
+        def detail_row(lbl: str, value: str, value_color: str = Colors.TEXT_PRIMARY) -> ft.Container:
+            """Build a single detail row."""
+            return ft.Container(
+                content=ft.Column(
+                    [
+                        label(lbl, color=Colors.TEXT_SECONDARY),
+                        body_text(value or "-", color=value_color, weight=FontWeight.MEDIUM),
+                    ],
+                    spacing=2,
+                ),
+                padding=ft.padding.only(bottom=Spacing.MD),
+            )
+        
+        return ft.Column(
+            [
+                ft.Container(height=Spacing.MD),
+                
+                # Table number (prominent)
+                ft.Container(
+                    content=ft.Row(
+                        [
+                            ft.Icon(icons.TABLE_RESTAURANT, color=Colors.ACCENT_PRIMARY, size=32),
+                            ft.Container(width=Spacing.SM),
+                            heading(f"{t('table')} #{data.get('table_number', '?')}", size=Typography.SIZE_XL),
+                        ],
+                        alignment=ft.MainAxisAlignment.CENTER,
+                    ),
+                    padding=ft.padding.only(bottom=Spacing.LG),
+                    alignment=ft.alignment.center,
+                ),
+                
+                ft.Divider(height=1, color=Colors.BORDER),
+                ft.Container(height=Spacing.MD),
+                
+                # Date & Time
+                detail_row(t("date"), date_display),
+                detail_row(t("time"), time_display),
+                detail_row(t("duration"), duration_display),
+                
+                ft.Divider(height=1, color=Colors.BORDER),
+                ft.Container(height=Spacing.MD),
+                
+                # Customer info
+                detail_row(t("customer"), data.get("customer_name", "")),
+                detail_row(t("phone"), data.get("phone_number", "") or data.get("phone", "")),
+                
+                ft.Divider(height=1, color=Colors.BORDER),
+                ft.Container(height=Spacing.MD),
+                
+                # Waiter & Status
+                detail_row(t("waiter"), waiter_name),
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            label(t("status"), color=Colors.TEXT_SECONDARY),
+                            ft.Container(
+                                content=body_text(status_display, size=Typography.SIZE_SM),
+                                bgcolor=status_color + "40",
+                                border_radius=Radius.SM,
+                                padding=ft.padding.symmetric(horizontal=12, vertical=6),
+                            ),
+                        ],
+                        spacing=4,
+                    ),
+                    padding=ft.padding.only(bottom=Spacing.MD),
+                ),
+                
+                # Notes (if any)
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            label(t("notes"), color=Colors.TEXT_SECONDARY),
+                            body_text(
+                                data.get("additional_info", "") or data.get("notes", "") or "-",
+                                color=Colors.TEXT_PRIMARY if (data.get("additional_info") or data.get("notes")) else Colors.TEXT_DISABLED,
+                            ),
+                        ],
+                        spacing=2,
+                    ),
+                    padding=ft.padding.only(bottom=Spacing.LG),
+                ),
+                
+                ft.Container(expand=True),  # Spacer
+                
+                # Close button only (no edit actions)
+                ft.ElevatedButton(
+                    text=t("close"),
+                    icon=icons.CLOSE,
+                    bgcolor=Colors.SURFACE_ELEVATED,
+                    color=Colors.TEXT_PRIMARY,
+                    on_click=lambda e: self.close(),
+                    width=None,
+                ),
+            ],
+            scroll=ft.ScrollMode.AUTO,
+            expand=True,
+        )
+    
     def _handle_save(self):
         """Handle save button click."""
         # Validate fields
         if not self.table_dropdown.value:
-            self._show_error("Моля, изберете маса")
+            self._show_error(t("please_select_table"))
             return
         
         if not self.date_field.value:
-            self._show_error("Моля, изберете дата")
+            self._show_error(t("please_select_date"))
             return
         
         if not self.hour_dropdown.value or not self.minute_dropdown.value:
-            self._show_error("Моля, изберете час и минути")
+            self._show_error(t("please_select_time"))
             return
         
         if not self.customer_name_field.value:
-            self._show_error("Моля, въведете име на клиент")
+            self._show_error(t("please_enter_name"))
             return
         
         # Parse date and time
@@ -323,7 +451,7 @@ class ActionPanel:
             
             reservation_datetime = datetime(year, month, day, hour, minute)
         except (ValueError, IndexError):
-            self._show_error("Невалидна дата или час")
+            self._show_error(t("invalid_date_time"))
             return
         
         # Build reservation data
@@ -436,7 +564,7 @@ class ActionPanel:
         
         # Build panel
         self.panel_content.controls.clear()
-        self.panel_content.controls.append(self._build_header("Създай резервация"))
+        self.panel_content.controls.append(self._build_header(t("create_reservation")))
         form = self._build_create_edit_form()
         self._pre_fill_from_context(app_state)
         self.panel_content.controls.append(
@@ -454,7 +582,7 @@ class ActionPanel:
         
         # Build panel
         self.panel_content.controls.clear()
-        self.panel_content.controls.append(self._build_header("Редактирай резервация"))
+        self.panel_content.controls.append(self._build_header(t("edit_reservation")))
         form = self._build_create_edit_form()
         self._pre_fill_form(reservation)
         self.panel_content.controls.append(
@@ -472,7 +600,7 @@ class ActionPanel:
         
         # Build panel
         self.panel_content.controls.clear()
-        self.panel_content.controls.append(self._build_header("Изтрий резервация"))
+        self.panel_content.controls.append(self._build_header(t("delete_reservation")))
         confirm_ui = self._build_delete_confirm()
         self.panel_content.controls.append(
             ft.Container(content=confirm_ui, padding=Spacing.LG, expand=True)
@@ -480,6 +608,32 @@ class ActionPanel:
         
         # Animate open
         self.container.width = 450
+        self.page.update()
+    
+    def open_view(self, reservation: Dict[str, Any], waiter_name: str = ""):
+        """
+        Open panel in read-only view mode.
+        
+        Used for viewing reservation details from Table Layout when clicking
+        on occupied or soon-occupied tables.
+        
+        Args:
+            reservation: Reservation data dictionary
+            waiter_name: Pre-resolved waiter name (to avoid DB lookup in panel)
+        """
+        self.mode = PanelMode.VIEW
+        self.reservation_data = reservation
+        
+        # Build panel
+        self.panel_content.controls.clear()
+        self.panel_content.controls.append(self._build_header(t("reservation_details")))
+        view_ui = self._build_view_details(waiter_name)
+        self.panel_content.controls.append(
+            ft.Container(content=view_ui, padding=Spacing.LG, expand=True)
+        )
+        
+        # Animate open
+        self.container.width = 400
         self.page.update()
     
     def close(self):
@@ -495,4 +649,3 @@ class ActionPanel:
     def is_open(self) -> bool:
         """Check if panel is open."""
         return self.mode != PanelMode.HIDDEN
-
