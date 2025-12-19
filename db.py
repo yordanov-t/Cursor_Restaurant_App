@@ -52,7 +52,27 @@ class DBManager:
                 FOREIGN KEY(waiter_id) REFERENCES waiters(id)
             )
         ''')
+        # Create sections table for table grouping
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS sections (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                display_order INTEGER DEFAULT 0
+            )
+        ''')
+        # Create section_tables junction table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS section_tables (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                section_id INTEGER NOT NULL,
+                table_number INTEGER NOT NULL,
+                FOREIGN KEY(section_id) REFERENCES sections(id) ON DELETE CASCADE,
+                UNIQUE(table_number)
+            )
+        ''')
         self.conn.commit()
+        # Initialize default sections if none exist
+        self._initialize_default_sections()
     # -------------------------
     # Waiter management methods
     # -------------------------
@@ -253,3 +273,131 @@ class DBManager:
         self.conn.row_factory = sqlite3.Row
     def close(self):
         self.conn.close()
+    
+    # -------------------------
+    # Section management
+    # -------------------------
+    def _initialize_default_sections(self):
+        """Initialize default sections if none exist."""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM sections")
+        count = cursor.fetchone()[0]
+        if count == 0:
+            # Create default sections
+            default_sections = [
+                ("Основна зала", 1, list(range(1, 21))),      # Tables 1-20
+                ("Затворена градина", 2, list(range(21, 36))), # Tables 21-35
+                ("Градина", 3, list(range(36, 51))),          # Tables 36-50
+            ]
+            for name, order, tables in default_sections:
+                cursor.execute(
+                    "INSERT INTO sections (name, display_order) VALUES (?, ?)",
+                    (name, order)
+                )
+                section_id = cursor.lastrowid
+                for table_num in tables:
+                    cursor.execute(
+                        "INSERT INTO section_tables (section_id, table_number) VALUES (?, ?)",
+                        (section_id, table_num)
+                    )
+            self.conn.commit()
+    
+    def get_sections(self):
+        """Get all sections ordered by display_order."""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM sections ORDER BY display_order")
+        return cursor.fetchall()
+    
+    def get_section_by_id(self, section_id):
+        """Get a section by ID."""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM sections WHERE id = ?", (section_id,))
+        return cursor.fetchone()
+    
+    def get_section_tables(self, section_id):
+        """Get all table numbers assigned to a section."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT table_number FROM section_tables WHERE section_id = ? ORDER BY table_number",
+            (section_id,)
+        )
+        return [row["table_number"] for row in cursor.fetchall()]
+    
+    def get_all_section_tables(self):
+        """Get all sections with their table assignments."""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT s.id, s.name, s.display_order, 
+                   GROUP_CONCAT(st.table_number) as tables
+            FROM sections s
+            LEFT JOIN section_tables st ON s.id = st.section_id
+            GROUP BY s.id
+            ORDER BY s.display_order
+        """)
+        result = []
+        for row in cursor.fetchall():
+            tables = []
+            if row["tables"]:
+                tables = [int(t) for t in row["tables"].split(",")]
+            result.append({
+                "id": row["id"],
+                "name": row["name"],
+                "display_order": row["display_order"],
+                "tables": sorted(tables)
+            })
+        return result
+    
+    def create_section(self, name, display_order=None):
+        """Create a new section."""
+        cursor = self.conn.cursor()
+        if display_order is None:
+            cursor.execute("SELECT COALESCE(MAX(display_order), 0) + 1 FROM sections")
+            display_order = cursor.fetchone()[0]
+        try:
+            cursor.execute(
+                "INSERT INTO sections (name, display_order) VALUES (?, ?)",
+                (name, display_order)
+            )
+            self.conn.commit()
+            return cursor.lastrowid
+        except sqlite3.IntegrityError:
+            return None  # Duplicate name
+    
+    def update_section(self, section_id, name):
+        """Update a section's name."""
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute(
+                "UPDATE sections SET name = ? WHERE id = ?",
+                (name, section_id)
+            )
+            self.conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False  # Duplicate name
+    
+    def delete_section(self, section_id):
+        """Delete a section and its table assignments."""
+        cursor = self.conn.cursor()
+        cursor.execute("DELETE FROM section_tables WHERE section_id = ?", (section_id,))
+        cursor.execute("DELETE FROM sections WHERE id = ?", (section_id,))
+        self.conn.commit()
+    
+    def assign_tables_to_section(self, section_id, table_numbers):
+        """
+        Assign tables to a section (replaces existing assignments).
+        Tables are removed from other sections before assignment.
+        """
+        cursor = self.conn.cursor()
+        # Remove tables from all sections first
+        for table_num in table_numbers:
+            cursor.execute("DELETE FROM section_tables WHERE table_number = ?", (table_num,))
+        # Remove existing tables from this section
+        cursor.execute("DELETE FROM section_tables WHERE section_id = ?", (section_id,))
+        # Add new table assignments
+        for table_num in table_numbers:
+            cursor.execute(
+                "INSERT INTO section_tables (section_id, table_number) VALUES (?, ?)",
+                (section_id, table_num)
+            )
+        self.conn.commit()
