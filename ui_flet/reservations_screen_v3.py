@@ -30,8 +30,8 @@ def create_reservations_screen(
 ):
     """Create the reservations screen with left sidebar and Action Panel integration."""
     
-    # Reservations list container
-    reservations_list = ft.Column(spacing=Spacing.SM, scroll=ScrollMode.AUTO)
+    # Reservations list container (expand=True for proper touch scrolling on mobile)
+    reservations_list = ft.Column(spacing=Spacing.SM, scroll=ScrollMode.AUTO, expand=True)
     
     # Right content area (will compress when panel opens)
     right_content = ft.Container(expand=True)
@@ -113,13 +113,15 @@ def create_reservations_screen(
                 notes_text = res.get("additional_info") or ""
                 
                 # Build the main row content
+                # Uses compact fixed widths + expand on flexible columns so
+                # edit/delete buttons are always visible even on scaled tablets.
                 main_row_content = [
-                    # Table number
+                    # Table number (compact)
                     ft.Container(
                         content=body_text(f"#{res['table_number']}", weight=FontWeight.BOLD),
-                        width=60,
+                        width=44,
                     ),
-                    # Time
+                    # Time (fixed - datetime is always same length)
                     ft.Container(
                         content=ft.Column(
                             [
@@ -128,9 +130,9 @@ def create_reservations_screen(
                             ],
                             spacing=2,
                         ),
-                        width=150,
+                        width=130,
                     ),
-                    # Customer
+                    # Customer (expand - takes up remaining space)
                     ft.Container(
                         content=ft.Column(
                             [
@@ -139,9 +141,9 @@ def create_reservations_screen(
                             ],
                             spacing=2,
                         ),
-                        width=140,
+                        expand=2,
                     ),
-                    # Phone
+                    # Phone (compact)
                     ft.Container(
                         content=ft.Column(
                             [
@@ -150,9 +152,10 @@ def create_reservations_screen(
                             ],
                             spacing=2,
                         ),
-                        width=110,
+                        expand=2,
+                        visible=not is_narrow_screen,
                     ),
-                    # Waiter
+                    # Waiter (hidden on narrow screens to save space)
                     ft.Container(
                         content=ft.Column(
                             [
@@ -161,9 +164,10 @@ def create_reservations_screen(
                             ],
                             spacing=2,
                         ),
-                        width=100,
+                        expand=2,
+                        visible=not is_narrow_screen,
                     ),
-                    # Notes
+                    # Notes (hidden on narrow screens)
                     ft.Container(
                         content=ft.Column(
                             [
@@ -176,36 +180,42 @@ def create_reservations_screen(
                             ],
                             spacing=2,
                         ),
-                        width=120,
-                        visible=True,
+                        expand=2,
+                        visible=not is_narrow_screen,
                     ),
-                    # Status
+                    # Status badge (compact)
                     ft.Container(
                         content=ft.Container(
                             content=body_text(status_display, size=Typography.SIZE_SM),
                             bgcolor=status_color + "40",
                             border_radius=Radius.SM,
-                            padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                            padding=ft.padding.symmetric(horizontal=6, vertical=4),
                         ),
-                        width=110,
+                        width=90,
                     ),
-                    # Actions
-                    ft.Row(
-                        [
-                            ft.IconButton(
-                                icon=icons.EDIT,
-                                icon_color=Colors.ACCENT_PRIMARY,
-                                tooltip=t("edit"),
-                                on_click=lambda e, r=res_copy: action_panel.open_edit(r),
-                            ),
-                            ft.IconButton(
-                                icon=icons.DELETE,
-                                icon_color=Colors.DANGER,
-                                tooltip=t("delete"),
-                                on_click=lambda e, r=res_copy: action_panel.open_delete(r),
-                            ),
-                        ],
-                        spacing=0,
+                    # Actions - always visible, fixed width
+                    ft.Container(
+                        content=ft.Row(
+                            [
+                                ft.IconButton(
+                                    icon=icons.EDIT,
+                                    icon_color=Colors.ACCENT_PRIMARY,
+                                    icon_size=20,
+                                    tooltip=t("edit"),
+                                    on_click=lambda e, r=res_copy: action_panel.open_edit(r),
+                                ),
+                                ft.IconButton(
+                                    icon=icons.DELETE,
+                                    icon_color=Colors.DANGER,
+                                    icon_size=20,
+                                    tooltip=t("delete"),
+                                    on_click=lambda e, r=res_copy: action_panel.open_delete(r),
+                                ),
+                            ],
+                            spacing=0,
+                            tight=True,
+                        ),
+                        width=80,
                     ),
                 ]
                 
@@ -360,10 +370,11 @@ def create_reservations_screen(
         options=[ft.dropdown.Option(t("all"))] + [ft.dropdown.Option(f"{h:02d}") for h in range(24)],
         on_change=lambda e: app_state.update_filter(selected_hour=e.control.value) or refresh_reservations(),
         width=None,
-        text_size=Typography.SIZE_SM,
+        text_size=Typography.SIZE_XS,  # Smaller to prevent wrapping
         dense=True,
         bgcolor=Colors.SURFACE_GLASS,
         border_color=Colors.BORDER,
+        color=Colors.INPUT_TEXT,
     )
     
     minute_dropdown = ft.Dropdown(
@@ -372,10 +383,11 @@ def create_reservations_screen(
         options=[ft.dropdown.Option(m) for m in ["00", "15", "30", "45"]],
         on_change=lambda e: app_state.update_filter(selected_minute=e.control.value) or refresh_reservations(),
         width=None,
-        text_size=Typography.SIZE_SM,
+        text_size=Typography.SIZE_XS,  # Smaller to prevent wrapping
         dense=True,
         bgcolor=Colors.SURFACE_GLASS,
         border_color=Colors.BORDER,
+        color=Colors.INPUT_TEXT,
     )
     
     status_dropdown = ft.Dropdown(
@@ -388,10 +400,11 @@ def create_reservations_screen(
         ],
         on_change=lambda e: app_state.update_filter(selected_status=e.control.value) or refresh_reservations(),
         width=None,
-        text_size=Typography.SIZE_SM,
+        text_size=Typography.SIZE_XS,  # Smaller to prevent wrapping
         dense=True,
         bgcolor=Colors.SURFACE_GLASS,
         border_color=Colors.BORDER,
+        color=Colors.INPUT_TEXT,
     )
     
     table_dropdown = ft.Dropdown(
@@ -400,59 +413,156 @@ def create_reservations_screen(
         options=[ft.dropdown.Option(t("all"))] + [ft.dropdown.Option(str(i)) for i in range(1, 51)],
         on_change=lambda e: app_state.update_filter(selected_table=e.control.value) or refresh_reservations(),
         width=None,
-        text_size=Typography.SIZE_SM,
+        text_size=Typography.SIZE_XS,  # Smaller to prevent wrapping
         dense=True,
         bgcolor=Colors.SURFACE_GLASS,
         border_color=Colors.BORDER,
+        color=Colors.INPUT_TEXT,  # Use theme input text color
     )
     
     # ==========================================
-    # Left Sidebar
+    # Left Sidebar (Responsive)
     # ==========================================
     
+    # Sidebar content (shared between normal sidebar and drawer)
+    sidebar_content = ft.Column(
+        [
+            # Title
+            heading(t("filters"), size=Typography.SIZE_LG, weight=FontWeight.BOLD),
+            ft.Divider(height=1, color=Colors.BORDER),
+            
+            # Date picker
+            ft.Container(
+                content=ft.Column([
+                    label(t("date"), color=Colors.TEXT_SECONDARY),
+                    date_picker_field,
+                ], spacing=4),
+                padding=ft.padding.only(top=Spacing.SM),
+            ),
+            
+            ft.Container(height=Spacing.SM),
+            
+            # Time filters (hour + minute)
+            ft.Row([
+                ft.Container(content=hour_dropdown, expand=True),
+                ft.Container(content=minute_dropdown, expand=True),
+            ], spacing=Spacing.XS),
+            
+            ft.Container(height=Spacing.SM),
+            
+            # Status and Table filters - stacked vertically
+            status_dropdown,
+            
+            ft.Container(height=Spacing.XS),
+            
+            table_dropdown,
+            
+            ft.Container(expand=True),  # Spacer
+            
+            ft.Divider(height=1, color=Colors.BORDER),
+            
+            # Create reservation button
+            glass_button(
+                t("create_reservation"),
+                icon=icons.ADD,
+                on_click=lambda e: action_panel.open_create(app_state),
+                variant="primary",
+                width=None,
+            ),
+            
+        ],
+        spacing=Spacing.SM,
+        expand=True,
+    )
+    
+    # Determine if we're on a narrow screen (tablet/mobile)
+    # Default to wide screen if window_width is not available (desktop usually starts wide)
+    try:
+        is_narrow_screen = page.window_width and page.window_width < 900
+    except:
+        is_narrow_screen = False
+    
+    # Create drawer for narrow screens (filters only, not action buttons)
+    drawer_content_filters = ft.Column(
+        [
+            # Title
+            heading(t("filters"), size=Typography.SIZE_LG, weight=FontWeight.BOLD),
+            ft.Divider(height=1, color=Colors.BORDER),
+            
+            # Date picker
+            ft.Container(
+                content=ft.Column([
+                    label(t("date"), color=Colors.TEXT_SECONDARY),
+                    date_picker_field,
+                ], spacing=4),
+                padding=ft.padding.only(top=Spacing.SM),
+            ),
+            
+            ft.Container(height=Spacing.SM),
+            
+            # Time filters (hour + minute)
+            ft.Row([
+                ft.Container(content=hour_dropdown, expand=True),
+                ft.Container(content=minute_dropdown, expand=True),
+            ], spacing=Spacing.XS),
+            
+            ft.Container(height=Spacing.SM),
+            
+            # Status and Table filters - stacked vertically
+            status_dropdown,
+            
+            ft.Container(height=Spacing.XS),
+            
+            table_dropdown,
+        ],
+        spacing=Spacing.SM,
+        scroll=ScrollMode.AUTO,
+    )
+    
+    drawer = ft.NavigationDrawer(
+        controls=[
+            ft.Container(
+                content=glass_container(
+                    content=drawer_content_filters,
+                    padding=Spacing.LG,
+                ),
+                padding=Spacing.MD,
+                height=page.window_height - 100 if hasattr(page, 'window_height') and page.window_height else 800,
+            )
+        ],
+        bgcolor=Colors.SURFACE + "E6",  # Semi-transparent
+    )
+    
+    def toggle_drawer(e):
+        """Toggle the navigation drawer on narrow screens."""
+        drawer.open = not drawer.open
+        drawer.update()
+    
+    # Left sidebar (visible on wide screens only)
     left_sidebar = ft.Container(
         content=glass_container(
-            content=ft.Column(
+            content=sidebar_content,
+            padding=Spacing.LG,
+        ),
+        width=240,
+        padding=Spacing.MD,
+        visible=not is_narrow_screen,
+    )
+    
+    # Top action bar for narrow screens (always visible)
+    narrow_top_bar = ft.Container(
+        content=glass_container(
+            content=ft.Row(
                 [
-                    # Title
-                    heading(t("filters"), size=Typography.SIZE_LG, weight=FontWeight.BOLD),
-                    ft.Divider(height=1, color=Colors.BORDER),
-                    
-                    # Date picker
-                    ft.Container(
-                        content=ft.Column([
-                            label(t("date"), color=Colors.TEXT_SECONDARY),
-                            date_picker_field,
-                        ], spacing=4),
-                        padding=ft.padding.only(top=Spacing.SM),
+                    # Filter button
+                    ft.IconButton(
+                        icon=icons.FILTER_LIST,
+                        tooltip=t("filters"),
+                        on_click=toggle_drawer,
+                        icon_color=Colors.ACCENT_PRIMARY,
                     ),
-                    
-                    ft.Container(height=Spacing.SM),
-                    
-                    # Time filters (hour + minute)
-                    ft.Container(
-                        content=ft.Column([
-                            label(t("hour"), color=Colors.TEXT_SECONDARY),
-                            ft.Row([
-                                ft.Container(content=hour_dropdown, expand=True),
-                                ft.Container(content=minute_dropdown, expand=True),
-                            ], spacing=Spacing.XS),
-                        ], spacing=4),
-                    ),
-                    
-                    ft.Container(height=Spacing.SM),
-                    
-                    # Status filter
-                    status_dropdown,
-                    
-                    ft.Container(height=Spacing.SM),
-                    
-                    # Table filter
-                    table_dropdown,
                     
                     ft.Container(expand=True),  # Spacer
-                    
-                    ft.Divider(height=1, color=Colors.BORDER),
                     
                     # Create reservation button
                     glass_button(
@@ -462,45 +572,46 @@ def create_reservations_screen(
                         variant="primary",
                         width=None,
                     ),
-                    
-                    ft.Container(height=Spacing.SM),
-                    
-                    # Navigation to table layout
-                    glass_button(
-                        t("to_layout"),
-                        icon=icons.TABLE_CHART,
-                        on_click=lambda e: app_state.navigate_to("table_layout"),
-                        variant="secondary",
-                        width=None,
-                    ),
                 ],
-                spacing=Spacing.SM,
-                expand=True,
+                alignment=ft.MainAxisAlignment.START,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            padding=Spacing.LG,
+            padding=Spacing.MD,
         ),
-        width=240,
-        padding=Spacing.MD,
+        padding=ft.padding.only(left=Spacing.MD, right=Spacing.MD, top=Spacing.SM),
+        visible=is_narrow_screen,
     )
     
     # ==========================================
     # Right Content Area
     # ==========================================
     
+    # Build content column (with or without top bar for narrow screens)
+    content_column_items = []
+    
+    # Add top action bar on narrow screens
+    if is_narrow_screen:
+        content_column_items.append(narrow_top_bar)
+    
+    # Add header
+    content_column_items.append(
+        ft.Container(
+            content=heading(t("reservations"), size=Typography.SIZE_XL, weight=FontWeight.BOLD),
+            padding=ft.padding.only(left=Spacing.LG, top=Spacing.MD, bottom=Spacing.SM),
+        )
+    )
+    
+    # Add reservations list
+    content_column_items.append(
+        ft.Container(
+            content=reservations_list,
+            padding=ft.padding.symmetric(horizontal=Spacing.LG),
+            expand=True,
+        )
+    )
+    
     right_content.content = ft.Column(
-        [
-            # Header
-            ft.Container(
-                content=heading(t("reservations"), size=Typography.SIZE_XL, weight=FontWeight.BOLD),
-                padding=ft.padding.only(left=Spacing.LG, top=Spacing.MD, bottom=Spacing.SM),
-            ),
-            # Reservations list
-            ft.Container(
-                content=reservations_list,
-                padding=ft.padding.symmetric(horizontal=Spacing.LG),
-                expand=True,
-            ),
-        ],
+        content_column_items,
         spacing=0,
         expand=True,
     )
@@ -508,14 +619,46 @@ def create_reservations_screen(
     # Initial data load
     refresh_reservations()
     
-    # Return layout with left sidebar, right content, and action panel
-    return ft.Row(
+    # Add drawer to page for narrow screens
+    if is_narrow_screen:
+        page.drawer = drawer
+    
+    # Build main layout
+    main_content = ft.Row(
         [
-            left_sidebar,
-            right_content,
+            left_sidebar,  # Visible on wide screens, hidden on narrow
+            right_content,  # Contains top bar on narrow screens
             action_panel.container,
         ],
         spacing=0,
         expand=True,
         vertical_alignment=ft.CrossAxisAlignment.START,
+    )
+
+    # Floating circular button - always on top, bottom-right corner
+    # Always visible on all screen sizes - floats above all content via Stack
+    fab = ft.Container(
+        content=ft.IconButton(
+            icon=icons.TABLE_CHART,
+            icon_color="#FFFFFF",
+            icon_size=28,
+            tooltip=t("to_layout"),
+            on_click=lambda e: app_state.navigate_to("table_layout"),
+            style=ft.ButtonStyle(
+                bgcolor=Colors.ACCENT_PRIMARY,
+                shape=ft.CircleBorder(),
+                padding=ft.padding.all(12),
+            ),
+        ),
+        right=16,
+        bottom=16,
+    )
+
+    # Wrap in Stack so FAB floats above all content
+    return ft.Stack(
+        [
+            main_content,
+            fab,
+        ],
+        expand=True,
     )

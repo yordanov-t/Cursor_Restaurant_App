@@ -1,0 +1,18 @@
+# Restaurant Management System Dependencies
+
+# Core UI framework
+flet==0.28.3
+
+# Standard library modules used (included with Python 3.8+):
+# - sqlite3
+# - datetime
+# - json
+# - os
+# - shutil
+# - enum
+# - typing
+# - zoneinfo (Python 3.9+, backport available for 3.8)
+
+# For Python 3.8 (zoneinfo backport)
+# backports.zoneinfo; python_version < "3.9"
+

@@ -441,16 +441,18 @@ class ActionPanel:
         
         # Parse date and time
         try:
-            date_parts = self.date_field.value.split("-")
-            
+            # date_field.value is always "YYYY-MM-DD" (10 chars), take only the first 10 chars
+            date_str = str(self.date_field.value).strip()[:10]
+            date_parts = date_str.split("-")
+
             year = int(date_parts[0])
             month = int(date_parts[1])
             day = int(date_parts[2])
-            hour = int(self.hour_dropdown.value)
-            minute = int(self.minute_dropdown.value)
-            
+            hour = int(str(self.hour_dropdown.value).strip())
+            minute = int(str(self.minute_dropdown.value).strip())
+
             reservation_datetime = datetime(year, month, day, hour, minute)
-        except (ValueError, IndexError):
+        except Exception:
             self._show_error(t("invalid_date_time"))
             return
         
@@ -501,7 +503,15 @@ class ActionPanel:
         def handle_date_change(e):
             if e.control.value:
                 selected_date = e.control.value
-                self.date_field.value = selected_date.strftime("%Y-%m-%d")
+                try:
+                    # e.control.value can be a date, datetime, or string depending on Flet version
+                    if hasattr(selected_date, 'strftime'):
+                        self.date_field.value = selected_date.strftime("%Y-%m-%d")
+                    else:
+                        # String form: take only the date part (first 10 chars)
+                        self.date_field.value = str(selected_date)[:10]
+                except Exception:
+                    self.date_field.value = str(selected_date)[:10]
                 self.page.update()
         
         def handle_dismiss(e):
@@ -556,6 +566,10 @@ class ActionPanel:
             self.date_field.value = today.strftime("%Y-%m-%d")
             self.hour_dropdown.value = "18"
             self.minute_dropdown.value = "00"
+        
+        # Auto-fill current waiter if set
+        if app_state.current_waiter_id:
+            self.waiter_dropdown.value = str(app_state.current_waiter_id)
     
     def open_create(self, app_state):
         """Open panel in create mode."""
