@@ -170,6 +170,7 @@ class ActionPanel:
             bgcolor=Colors.SURFACE_GLASS,
             border_color=Colors.BORDER,
             color=Colors.TEXT_PRIMARY,
+            keyboard_type=ft.KeyboardType.PHONE,
         )
         
         # Notes

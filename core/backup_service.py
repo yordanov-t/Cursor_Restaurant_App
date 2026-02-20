@@ -6,6 +6,8 @@ Provides database backup and restore functionality with:
 - Manual backup creation
 - Backup listing with metadata
 - Safe atomic restore operations
+
+Works on both desktop and mobile (Android/iOS) with cross-platform storage.
 """
 
 import os
@@ -13,6 +15,17 @@ import shutil
 import sqlite3
 from datetime import datetime, date
 from typing import List, Dict, Optional, Any
+
+# Import storage utilities for cross-platform path handling
+try:
+    from .storage import get_backup_folder
+except ImportError:
+    # Fallback for when running without storage module
+    def get_backup_folder():
+        from pathlib import Path
+        path = Path("backups")
+        path.mkdir(parents=True, exist_ok=True)
+        return path
 
 
 class BackupService:
@@ -27,9 +40,9 @@ class BackupService:
     - Daily auto-backup on startup
     
     Thread-safe: Uses file-based operations, not SQLite connection-based backup.
+    Cross-platform: Uses app storage directory on mobile.
     """
     
-    BACKUP_FOLDER = "backups"
     BACKUP_PREFIX = "restaurant_"
     BACKUP_EXTENSION = ".db"
     
@@ -43,13 +56,16 @@ class BackupService:
         self.db_manager = db_manager
         self.db_name = db_manager.db_name
         
+        # Get cross-platform backup folder
+        self.backup_folder = str(get_backup_folder())
+        
         # Ensure backup folder exists
         self._ensure_backup_folder()
     
     def _ensure_backup_folder(self):
         """Create backup folder if it doesn't exist."""
-        if not os.path.exists(self.BACKUP_FOLDER):
-            os.makedirs(self.BACKUP_FOLDER)
+        if not os.path.exists(self.backup_folder):
+            os.makedirs(self.backup_folder)
     
     def _generate_backup_filename(self) -> str:
         """Generate a backup filename with current timestamp."""
@@ -58,7 +74,7 @@ class BackupService:
     
     def _get_backup_path(self, filename: str) -> str:
         """Get full path for a backup file."""
-        return os.path.join(self.BACKUP_FOLDER, filename)
+        return os.path.join(self.backup_folder, filename)
     
     def _parse_backup_timestamp(self, filename: str) -> Optional[datetime]:
         """Parse timestamp from backup filename."""
@@ -186,10 +202,10 @@ class BackupService:
         """
         backups = []
         
-        if not os.path.exists(self.BACKUP_FOLDER):
+        if not os.path.exists(self.backup_folder):
             return backups
         
-        for filename in os.listdir(self.BACKUP_FOLDER):
+        for filename in os.listdir(self.backup_folder):
             if filename.startswith(self.BACKUP_PREFIX) and filename.endswith(self.BACKUP_EXTENSION):
                 metadata = self._get_backup_metadata(filename)
                 if metadata:
@@ -222,7 +238,13 @@ class BackupService:
             print(f"Backup deletion failed: {e}")
             return False
     
-    def restore_backup(self, filename: str, on_progress: Optional[callable] = None) -> bool:
+    def restore_backup(
+        self, 
+        filename: str, 
+        on_progress: Optional[callable] = None,
+        on_complete: Optional[callable] = None,
+        on_error: Optional[callable] = None
+    ) -> bool:
         """
         Restore database from a backup file.
         
@@ -231,12 +253,15 @@ class BackupService:
         2. Create a safety backup of current DB
         3. Copy backup over current DB (using temp file for atomicity)
         4. Reinitialize DB manager
+        5. Trigger UI refresh via on_complete callback
         
         Thread-safe: Uses file operations, not connection-based restore.
         
         Args:
             filename: Name of the backup file to restore.
-            on_progress: Optional callback for progress updates.
+            on_progress: Optional callback for progress updates (message: str).
+            on_complete: Optional callback when restore is complete (for UI refresh).
+            on_error: Optional callback for error reporting (error_msg: str).
             
         Returns:
             True if restored successfully, False otherwise.
@@ -245,7 +270,10 @@ class BackupService:
         
         # Verify backup exists
         if not os.path.exists(filepath):
-            print(f"Backup file not found: {filepath}")
+            error_msg = f"Backup file not found: {filepath}"
+            print(error_msg)
+            if on_error:
+                on_error(error_msg)
             return False
         
         # Verify backup is a valid SQLite database
@@ -254,43 +282,71 @@ class BackupService:
             test_conn.execute("SELECT 1 FROM sqlite_master LIMIT 1")
             test_conn.close()
         except Exception as e:
-            print(f"Invalid backup file: {e}")
+            error_msg = f"Invalid backup file: {e}"
+            print(error_msg)
+            if on_error:
+                on_error(error_msg)
             return False
         
+        temp_path = None
         try:
             if on_progress:
                 on_progress("Създаване на резервно копие...")
             
-            # Create safety backup of current state
-            safety_backup = f"_pre_restore_safety_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
-            safety_path = self._get_backup_path(safety_backup)
-            shutil.copy2(self.db_name, safety_path)
+            # Create safety backup of current state (only if current DB exists)
+            if os.path.exists(self.db_name):
+                safety_backup = f"_pre_restore_safety_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+                safety_path = self._get_backup_path(safety_backup)
+                shutil.copy2(self.db_name, safety_path)
+                print(f"[Backup] Safety backup created: {safety_path}")
             
             if on_progress:
                 on_progress("Възстановяване на данните...")
             
-            # Copy backup to current DB location (atomic with temp file)
+            # Copy backup to temp location first (atomic with temp file)
             temp_path = self.db_name + ".tmp"
             shutil.copy2(filepath, temp_path)
+            print(f"[Backup] Copied backup to temp: {temp_path}")
             
             # Replace current DB with restored backup
             if os.path.exists(self.db_name):
                 os.remove(self.db_name)
+                print(f"[Backup] Removed current database")
+            
             os.rename(temp_path, self.db_name)
+            temp_path = None  # Clear temp_path since rename succeeded
+            print(f"[Backup] Database restored: {self.db_name}")
             
             if on_progress:
                 on_progress("Инициализиране...")
             
             # Reinitialize DB manager (ensures schema is up to date)
+            # This creates a fresh connection to the restored database
             self.db_manager.initialize_db()
+            print(f"[Backup] Database reinitialized")
             
             if on_progress:
                 on_progress("Готово!")
             
+            # Call completion callback for UI refresh
+            if on_complete:
+                on_complete()
+            
             return True
             
         except Exception as e:
-            print(f"Restore failed: {e}")
+            error_msg = f"Restore failed: {e}"
+            print(error_msg)
+            
+            # Clean up temp file if it exists
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except:
+                    pass
+            
+            if on_error:
+                on_error(error_msg)
             return False
     
     def has_today_backup(self) -> bool:

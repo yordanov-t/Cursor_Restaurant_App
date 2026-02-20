@@ -2,7 +2,7 @@
 Admin screen for Flet UI - V2 with full functionality, glassmorphism, and management panels.
 
 Uses right-side Action Panel pattern for all operations (no popups).
-Includes: Waiters, Sections, Tables, Backup management.
+Includes: Waiters, Sections, Tables, Backup management, Reports.
 Supports internationalization.
 """
 
@@ -10,6 +10,7 @@ import flet as ft
 from typing import Callable, List
 from db import DBManager
 from core import BackupService
+from core.reports import get_reservations_by_period, export_reports_to_pdf, get_default_export_path
 from ui_flet.theme import (Colors, Spacing, Radius, Typography, heading, label,
                              body_text, glass_container, glass_button, glass_card)
 from ui_flet.compat import icons, ScrollMode, FontWeight
@@ -21,6 +22,135 @@ from ui_flet.i18n import t
 
 ADMIN_USERNAME = "admin"
 ADMIN_PASSWORD = "password"
+
+
+def create_reports_tab(db: DBManager, page: ft.Page):
+    """Create the reports tab with statistics and export."""
+    
+    # Status message container
+    status_message = ft.Text("", color=Colors.TEXT_SECONDARY, size=Typography.SIZE_SM)
+    
+    # Initialize empty stats
+    monthly, weekly, daily = {}, {}, {}
+    
+    try:
+        # Get all reservations
+        reservations = db.get_reservations()
+        
+        # Calculate statistics
+        monthly, weekly, daily = get_reservations_by_period(reservations)
+    except Exception as e:
+        status_message.value = f"⚠️ Error loading statistics: {str(e)}"
+        status_message.color = Colors.DANGER
+    
+    def export_to_pdf(e):
+        """Export statistics to PDF."""
+        try:
+            output_path = get_default_export_path()
+            success = export_reports_to_pdf(monthly, weekly, daily, output_path)
+            
+            if success:
+                status_message.value = f"✅ PDF exported: {output_path}"
+                status_message.color = Colors.SUCCESS
+            else:
+                status_message.value = "❌ Failed to export PDF"
+                status_message.color = Colors.DANGER
+        except Exception as ex:
+            status_message.value = f"❌ Error: {str(ex)}"
+            status_message.color = Colors.DANGER
+        
+        page.update()
+    
+    # Build statistics display
+    def build_stats_card(title: str, data: dict, limit: int = None):
+        """Build a statistics card."""
+        if not data:
+            return glass_container(
+                content=ft.Column([
+                    heading(title, size=Typography.SIZE_LG, weight=FontWeight.BOLD),
+                    ft.Container(height=Spacing.SM),
+                    body_text("No data available", color=Colors.TEXT_SECONDARY),
+                ]),
+                padding=Spacing.LG,
+            )
+        
+        sorted_keys = sorted(data.keys())
+        if limit:
+            sorted_keys = sorted_keys[-limit:]
+        
+        rows = []
+        for key in sorted_keys:
+            rows.append(
+                ft.Row([
+                    ft.Container(
+                        content=body_text(key, size=Typography.SIZE_SM),
+                        expand=True,
+                    ),
+                    body_text(str(data[key]), size=Typography.SIZE_SM, weight=FontWeight.BOLD),
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+            )
+        
+        # Add total
+        total = sum(data[k] for k in sorted_keys)
+        rows.append(ft.Divider(height=1, color=Colors.BORDER))
+        rows.append(
+            ft.Row([
+                ft.Container(
+                    content=body_text("TOTAL", size=Typography.SIZE_SM, weight=FontWeight.BOLD),
+                    expand=True,
+                ),
+                body_text(str(total), size=Typography.SIZE_SM, weight=FontWeight.BOLD, color=Colors.ACCENT_PRIMARY),
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+        )
+        
+        return glass_container(
+            content=ft.Column([
+                heading(title, size=Typography.SIZE_LG, weight=FontWeight.BOLD),
+                ft.Container(height=Spacing.SM),
+                ft.Column(rows, spacing=Spacing.XS, scroll=ScrollMode.AUTO),
+            ]),
+            padding=Spacing.LG,
+        )
+    
+    # Build reports content
+    return ft.Container(
+        content=ft.Column([
+            # Header
+            ft.Container(
+                content=ft.Row([
+                    heading(t("reports"), size=Typography.SIZE_XL, weight=FontWeight.BOLD),
+                    ft.Container(expand=True),
+                    glass_button(
+                        "Export PDF",
+                        icon=icons.PICTURE_AS_PDF,
+                        on_click=export_to_pdf,
+                        variant="primary",
+                    ),
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                padding=ft.padding.only(bottom=Spacing.LG),
+            ),
+            
+            # Status message
+            ft.Container(
+                content=status_message,
+                padding=ft.padding.only(bottom=Spacing.SM),
+            ),
+            
+            # Statistics cards
+            ft.Container(
+                content=ft.Column([
+                    build_stats_card("Monthly Reservations", monthly),
+                    ft.Container(height=Spacing.MD),
+                    build_stats_card("Weekly Reservations (Last 12)", weekly, limit=12),
+                    ft.Container(height=Spacing.MD),
+                    build_stats_card("Daily Reservations (Last 30)", daily, limit=30),
+                ], scroll=ScrollMode.AUTO, expand=True),
+                expand=True,
+            ),
+        ], scroll=ScrollMode.AUTO, expand=True),
+        padding=Spacing.XL,
+        expand=True,
+    )
 
 
 def create_admin_screen(
@@ -120,7 +250,8 @@ def create_admin_screen(
     # ==========================================
     # Waiter Management Tab (with Action Panel)
     # ==========================================
-    waiters_list = ft.Column(spacing=Spacing.SM, scroll=ScrollMode.AUTO)
+    # expand=True for proper touch scrolling on mobile
+    waiters_list = ft.Column(spacing=Spacing.SM, scroll=ScrollMode.AUTO, expand=True)
     
     def refresh_waiters():
         """Refresh the waiters list."""
@@ -169,7 +300,8 @@ def create_admin_screen(
     # ==========================================
     # Sections Management Tab (with Action Panel)
     # ==========================================
-    sections_list = ft.Column(spacing=Spacing.MD, scroll=ScrollMode.AUTO)
+    # expand=True for proper touch scrolling on mobile
+    sections_list = ft.Column(spacing=Spacing.MD, scroll=ScrollMode.AUTO, expand=True)
     
     def refresh_sections():
         """Refresh the sections list."""
@@ -236,7 +368,8 @@ def create_admin_screen(
     # ==========================================
     # Tables Management Tab (with Action Panel)
     # ==========================================
-    tables_list = ft.Column(spacing=Spacing.SM, scroll=ScrollMode.AUTO)
+    # expand=True for proper touch scrolling on mobile
+    tables_list = ft.Column(spacing=Spacing.SM, scroll=ScrollMode.AUTO, expand=True)
     
     def refresh_tables():
         """Refresh the tables list."""
@@ -301,7 +434,8 @@ def create_admin_screen(
     # ==========================================
     # Backup Management Tab
     # ==========================================
-    backups_list = ft.Column(spacing=Spacing.SM, scroll=ScrollMode.AUTO)
+    # expand=True for proper touch scrolling on mobile
+    backups_list = ft.Column(spacing=Spacing.SM, scroll=ScrollMode.AUTO, expand=True)
     
     def refresh_backups():
         """Refresh the backups list."""
@@ -466,14 +600,18 @@ def create_admin_screen(
         return result
     
     def handle_backup_restore(filename: str) -> bool:
-        result = backup_service.restore_backup(filename)
-        if result:
-            # Refresh all data after restore
+        def on_restore_complete():
+            """Called when restore is complete - refresh all UI."""
             refresh_waiters()
             refresh_sections()
             refresh_tables()
             refresh_backups()
             refresh_callback()  # Refresh main app state
+        
+        result = backup_service.restore_backup(
+            filename,
+            on_complete=on_restore_complete
+        )
         return result
     
     # ==========================================
@@ -675,10 +813,7 @@ def create_admin_screen(
                         ft.Tab(
                             text=t("reports"),
                             icon=icons.ASSESSMENT,
-                            content=ft.Container(
-                                content=body_text(t("reports_coming_soon"), color=Colors.TEXT_SECONDARY),
-                                padding=Spacing.XL,
-                            ),
+                            content=create_reports_tab(db, page),
                         ),
                     ],
                 ),

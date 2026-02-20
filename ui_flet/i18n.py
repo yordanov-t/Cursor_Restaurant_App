@@ -2,11 +2,20 @@
 Internationalization (i18n) module for the Restaurant Management System.
 
 Provides translations for Bulgarian (default), English, French, and Russian.
+Works on both desktop and mobile (Android/iOS) with cross-platform storage.
 """
 
 import json
 import os
 from typing import Dict, Optional
+
+# Import storage utilities for cross-platform path handling
+try:
+    from core.storage import get_settings_path
+except ImportError:
+    # Fallback for when running without storage module
+    def get_settings_path(name="settings.json"):
+        return name
 
 # Language codes and their display labels
 # Using text labels for clarity (EN instead of GB flag for English)
@@ -20,8 +29,10 @@ LANGUAGES = {
 # Default language
 DEFAULT_LANGUAGE = "bg"
 
-# Settings file path for persistence
-SETTINGS_FILE = "settings.json"
+
+def _get_settings_file() -> str:
+    """Get the settings file path (cross-platform)."""
+    return get_settings_path("settings.json")
 
 
 # ==========================================
@@ -31,10 +42,10 @@ SETTINGS_FILE = "settings.json"
 TRANSLATIONS: Dict[str, Dict[str, str]] = {
     # App title
     "app_title": {
-        "bg": "Ресторант Хъшове",
-        "en": "Restaurant Hashove",
-        "fr": "Restaurant Hachové",
-        "ru": "Ресторан Хъшове",
+        "bg": "Hushove Restaurant App",
+        "en": "Hushove Restaurant App",
+        "fr": "Hushove Restaurant App",
+        "ru": "Hushove Restaurant App",
     },
     
     # Navigation / Screens
@@ -55,6 +66,46 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": "Admin Panel",
         "fr": "Panneau d'administration",
         "ru": "Панель администратора",
+    },
+    
+    # User Settings
+    "user_settings": {
+        "bg": "Настройки",
+        "en": "Settings",
+        "fr": "Paramètres",
+        "ru": "Настройки",
+    },
+    "current_waiter": {
+        "bg": "Текущ сервитьор",
+        "en": "Current Waiter",
+        "fr": "Serveur actuel",
+        "ru": "Текущий официант",
+    },
+    "none": {
+        "bg": "Няма",
+        "en": "None",
+        "fr": "Aucun",
+        "ru": "Нет",
+    },
+    
+    # Themes
+    "theme_night": {
+        "bg": "Нощ",
+        "en": "Night",
+        "fr": "Nuit",
+        "ru": "Ночь",
+    },
+    "theme_neon": {
+        "bg": "Неон",
+        "en": "Neon",
+        "fr": "Néon",
+        "ru": "Неон",
+    },
+    "theme_silhouette": {
+        "bg": "Силует",
+        "en": "Silhouette",
+        "fr": "Silhouette",
+        "ru": "Силуэт",
     },
     
     # Admin Login
@@ -119,6 +170,12 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": "Waiters",
         "fr": "Serveurs",
         "ru": "Официанты",
+    },
+    "reports": {
+        "bg": "Отчети",
+        "en": "Reports",
+        "fr": "Rapports",
+        "ru": "Отчёты",
     },
     "sections": {
         "bg": "Секции",
@@ -704,6 +761,12 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "fr": "Veuillez entrer le nom du client",
         "ru": "Пожалуйста, введите имя клиента",
     },
+    "please_fill_required_fields": {
+        "bg": "Моля, попълнете всички задължителни полета",
+        "en": "Please fill all required fields",
+        "fr": "Veuillez remplir tous les champs obligatoires",
+        "ru": "Пожалуйста, заполните все обязательные поля",
+    },
     "invalid_date_time": {
         "bg": "Невалидна дата или час",
         "en": "Invalid date or time",
@@ -769,8 +832,9 @@ class I18n:
     def _load_language(self) -> str:
         """Load saved language from settings file."""
         try:
-            if os.path.exists(SETTINGS_FILE):
-                with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
+            settings_file = _get_settings_file()
+            if os.path.exists(settings_file):
+                with open(settings_file, 'r', encoding='utf-8') as f:
                     settings = json.load(f)
                     lang = settings.get('language', DEFAULT_LANGUAGE)
                     if lang in LANGUAGES:
@@ -782,12 +846,13 @@ class I18n:
     def _save_language(self):
         """Save current language to settings file."""
         try:
+            settings_file = _get_settings_file()
             settings = {}
-            if os.path.exists(SETTINGS_FILE):
-                with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
+            if os.path.exists(settings_file):
+                with open(settings_file, 'r', encoding='utf-8') as f:
                     settings = json.load(f)
             settings['language'] = self._current_language
-            with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
+            with open(settings_file, 'w', encoding='utf-8') as f:
                 json.dump(settings, f, ensure_ascii=False, indent=2)
         except Exception:
             pass

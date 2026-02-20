@@ -2,64 +2,165 @@
 Glassmorphism / Liquid Glass Design System for Flet UI.
 
 Modern 2026 design with consistent spacing, colors, and glass effects.
+Uses theme manager for multi-theme support.
 """
 
 import flet as ft
+from ui_flet.theme_manager import get_palette
 
 
 # ============================================================================
-# COLOR PALETTE - Glassmorphism / Dark Theme
+# COLOR PALETTE - Dynamic (from theme manager)
 # ============================================================================
 
-class Colors:
-    """Color tokens for glassmorphism design."""
+class _ColorsProxy:
+    """Dynamic proxy for theme colors."""
+    
+    def __init__(self):
+        self._palette = get_palette()
+    
+    def refresh(self):
+        """Refresh colors from current theme palette."""
+        self._palette = get_palette()
     
     # Base colors
-    BACKGROUND = "#0A0E1A"  # Deep dark blue-black (fallback)
-    SURFACE = "#141B2D"  # Slightly lighter surface
-    SURFACE_GLASS = "rgba(20, 27, 45, 0.7)"  # Translucent glass
-    SURFACE_GLASS_HOVER = "rgba(30, 37, 55, 0.85)"  # Glass on hover
+    @property
+    def BACKGROUND(self):
+        return self._palette.background
     
-    # Gradient colors (for background)
-    GRADIENT_START = "#1E3A8A"  # Deep blue
-    GRADIENT_MID = "#6B21A8"     # Purple
-    GRADIENT_END = "#4C1D95"     # Dark purple
+    @property
+    def SURFACE(self):
+        return self._palette.surface
+    
+    @property
+    def SURFACE_GLASS(self):
+        return self._palette.surface_glass
+    
+    @property
+    def SURFACE_GLASS_HOVER(self):
+        return self._palette.surface_glass_hover
+    
+    @property
+    def SURFACE_ELEVATED(self):
+        return self._palette.surface_elevated
+    
+    # Gradient colors
+    @property
+    def GRADIENT_START(self):
+        return self._palette.gradient_start
+    
+    @property
+    def GRADIENT_MID(self):
+        return self._palette.gradient_mid
+    
+    @property
+    def GRADIENT_END(self):
+        return self._palette.gradient_end
     
     # Text colors
-    TEXT_PRIMARY = "#FFFFFF"
-    TEXT_SECONDARY = "#B0B8CC"
-    TEXT_DISABLED = "#6B7280"
+    @property
+    def TEXT_PRIMARY(self):
+        return self._palette.text_primary
+    
+    @property
+    def TEXT_SECONDARY(self):
+        return self._palette.text_secondary
+    
+    @property
+    def TEXT_DISABLED(self):
+        return self._palette.text_disabled
+    
+    @property
+    def BUTTON_TEXT(self):
+        return self._palette.button_text
+    
+    @property
+    def INPUT_TEXT(self):
+        return self._palette.input_text
+    
+    @property
+    def ICON_COLOR(self):
+        return self._palette.icon_color
     
     # Accent colors
-    ACCENT_PRIMARY = "#3B82F6"  # Blue
-    ACCENT_SECONDARY = "#8B5CF6"  # Purple
+    @property
+    def ACCENT_PRIMARY(self):
+        return self._palette.accent_primary
+    
+    @property
+    def ACCENT_SECONDARY(self):
+        return self._palette.accent_secondary
     
     # Status colors
-    SUCCESS = "#10B981"  # Green
-    SUCCESS_GLASS = "rgba(16, 185, 129, 0.2)"
-    WARNING = "#F59E0B"  # Orange/Amber
-    WARNING_GLASS = "rgba(245, 158, 11, 0.2)"
-    DANGER = "#EF4444"  # Red
-    DANGER_GLASS = "rgba(239, 68, 68, 0.2)"
+    @property
+    def SUCCESS(self):
+        return self._palette.success
     
-    # Table states (from existing compat)
-    TABLE_FREE = "#10B981"  # Green
-    TABLE_OCCUPIED = "#EF4444"  # Red
-    TABLE_SOON = "#F59E0B"  # Orange
+    @property
+    def SUCCESS_GLASS(self):
+        return self._palette.success_glass
     
-    # Table selected states (darker for highlight)
-    TABLE_FREE_SELECTED = "#0D9668"  # Darker green
-    TABLE_OCCUPIED_SELECTED = "#B91C1C"  # Darker red
-    TABLE_SOON_SELECTED = "#D97706"  # Darker orange
+    @property
+    def WARNING(self):
+        return self._palette.warning
     
-    # Surface variants
-    SURFACE_ELEVATED = "#1F2937"  # Elevated surface (slightly lighter than SURFACE)
+    @property
+    def WARNING_GLASS(self):
+        return self._palette.warning_glass
+    
+    @property
+    def DANGER(self):
+        return self._palette.danger
+    
+    @property
+    def DANGER_GLASS(self):
+        return self._palette.danger_glass
+    
+    # Table states
+    @property
+    def TABLE_FREE(self):
+        return self._palette.table_free
+    
+    @property
+    def TABLE_OCCUPIED(self):
+        return self._palette.table_occupied
+    
+    @property
+    def TABLE_SOON(self):
+        return self._palette.table_soon
+    
+    @property
+    def TABLE_FREE_SELECTED(self):
+        return self._palette.table_free_selected
+    
+    @property
+    def TABLE_OCCUPIED_SELECTED(self):
+        return self._palette.table_occupied_selected
+    
+    @property
+    def TABLE_SOON_SELECTED(self):
+        return self._palette.table_soon_selected
     
     # Borders & overlays
-    BORDER = "rgba(255, 255, 255, 0.1)"
-    BORDER_FOCUS = "rgba(59, 130, 246, 0.5)"
-    BORDER_SELECTED = "rgba(255, 255, 255, 0.4)"  # Stronger border for selected items
-    OVERLAY = "rgba(0, 0, 0, 0.5)"
+    @property
+    def BORDER(self):
+        return self._palette.border
+    
+    @property
+    def BORDER_FOCUS(self):
+        return self._palette.border_focus
+    
+    @property
+    def BORDER_SELECTED(self):
+        return self._palette.border_selected
+    
+    @property
+    def OVERLAY(self):
+        return self._palette.overlay
+
+
+# Global Colors instance
+Colors = _ColorsProxy()
 
 
 # ============================================================================
@@ -75,6 +176,24 @@ class Spacing:
     XL = 24
     XXL = 32
     XXXL = 48
+
+
+# ============================================================================
+# TOUCH / MOBILE CONSTANTS
+# ============================================================================
+
+class Touch:
+    """
+    Touch-friendly sizing for mobile devices.
+    
+    Based on WCAG 2.1 and Material Design guidelines:
+    - Minimum touch target: 44px (WCAG)
+    - Recommended touch target: 48px (Material)
+    """
+    MIN_TAP_TARGET = 44  # Minimum tappable area
+    RECOMMENDED_TAP_TARGET = 48  # Recommended tappable area
+    ICON_BUTTON_SIZE = 48  # Size for icon buttons on mobile
+    TOUCH_PADDING = 12  # Extra padding for touch targets
 
 
 # ============================================================================
@@ -178,7 +297,7 @@ def glass_button(
         on_click=on_click,
         width=width,
         bgcolor=colors.get(variant, Colors.ACCENT_PRIMARY),
-        color=Colors.TEXT_PRIMARY,
+        color=Colors.BUTTON_TEXT,  # Use button-specific text color
         style=ft.ButtonStyle(
             shape=ft.RoundedRectangleBorder(radius=Radius.SM),
             padding=ft.padding.symmetric(horizontal=Spacing.LG, vertical=Spacing.MD),
@@ -289,4 +408,81 @@ def body_text(text: str, **kwargs):
     }
     merged = _safe_text_kwargs(defaults, kwargs)
     return ft.Text(text, **merged)
+
+
+def touch_icon_button(
+    icon,
+    on_click=None,
+    tooltip: str = None,
+    icon_color: str = Colors.TEXT_PRIMARY,
+    icon_size: int = 24,
+    **kwargs
+):
+    """
+    Create a touch-friendly icon button with larger tap target.
+    
+    Wraps ft.IconButton in a Container to ensure minimum touch target size
+    for accessibility on mobile devices.
+    
+    Args:
+        icon: Icon to display
+        on_click: Click handler
+        tooltip: Optional tooltip text
+        icon_color: Icon color
+        icon_size: Icon size
+        **kwargs: Additional IconButton properties
+    """
+    return ft.Container(
+        content=ft.IconButton(
+            icon=icon,
+            on_click=on_click,
+            tooltip=tooltip,
+            icon_color=icon_color,
+            icon_size=icon_size,
+            **kwargs
+        ),
+        width=Touch.ICON_BUTTON_SIZE,
+        height=Touch.ICON_BUTTON_SIZE,
+        alignment=ft.alignment.center,
+    )
+
+
+def touch_button(
+    text: str,
+    on_click=None,
+    icon=None,
+    variant: str = "primary",
+    **kwargs
+):
+    """
+    Create a touch-friendly button with adequate touch target size.
+    
+    Args:
+        text: Button text
+        on_click: Click handler
+        icon: Optional icon
+        variant: Button variant (primary, secondary, danger, success)
+        **kwargs: Additional button properties
+    """
+    colors = {
+        "primary": Colors.ACCENT_PRIMARY,
+        "secondary": Colors.SURFACE_GLASS_HOVER,
+        "danger": Colors.DANGER,
+        "success": Colors.SUCCESS,
+        "warning": Colors.WARNING,
+    }
+    
+    return ft.ElevatedButton(
+        text=text,
+        icon=icon,
+        on_click=on_click,
+        bgcolor=colors.get(variant, Colors.ACCENT_PRIMARY),
+        color=Colors.BUTTON_TEXT,  # Use button-specific text color
+        height=Touch.ICON_BUTTON_SIZE,  # Ensure touch-friendly height
+        style=ft.ButtonStyle(
+            shape=ft.RoundedRectangleBorder(radius=Radius.SM),
+            padding=ft.padding.symmetric(horizontal=Spacing.LG, vertical=Touch.TOUCH_PADDING),
+        ),
+        **kwargs
+    )
 

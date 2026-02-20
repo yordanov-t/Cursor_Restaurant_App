@@ -1,12 +1,13 @@
 """
 Application state management for Flet UI.
 
-Centralized state for filters, reservations, navigation, and language.
+Centralized state for filters, reservations, navigation, language, and theme.
 """
 
 from datetime import date, datetime
 from typing import Optional, Callable, List, Dict, Any
 from ui_flet.i18n import get_current_language, set_language as i18n_set_language
+from ui_flet.theme_manager import get_current_theme, set_theme as theme_set_theme
 
 
 class AppState:
@@ -39,13 +40,19 @@ class AppState:
         self.table_states: Dict[int, tuple] = {}
         
         # Navigation
-        self.current_screen = "reservations"  # reservations, table_layout, admin
+        self.current_screen = "reservations"  # reservations, table_layout, admin, user_settings
         
         # Admin
         self.admin_logged_in = False
         
         # Language - load from i18n module (persisted)
         self._language = get_current_language()
+        
+        # Theme - load from theme manager (persisted)
+        self._theme = get_current_theme()
+        
+        # Current waiter - for default waiter selection in reservations
+        self.current_waiter_id: Optional[int] = None
         
         # Callbacks for UI refresh
         self.on_state_change: Optional[Callable] = None
@@ -72,6 +79,22 @@ class AppState:
         """Set current language and trigger UI refresh."""
         self._language = lang
         i18n_set_language(lang)
+        if self.on_state_change:
+            self.on_state_change()
+    
+    @property
+    def theme(self) -> str:
+        """Get current theme code."""
+        return self._theme
+    
+    @theme.setter
+    def theme(self, theme_code: str):
+        """Set current theme and trigger UI refresh."""
+        self._theme = theme_code
+        theme_set_theme(theme_code)
+        # Refresh Colors proxy to pick up new theme
+        from ui_flet.theme import Colors
+        Colors.refresh()
         if self.on_state_change:
             self.on_state_change()
     

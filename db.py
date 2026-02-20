@@ -3,6 +3,18 @@ import os
 import shutil
 from datetime import datetime, timedelta
 
+# Import storage utilities for cross-platform path handling
+try:
+    from core.storage import get_database_path, is_mobile, is_first_run
+except ImportError:
+    # Fallback for when running without core module (shouldn't happen)
+    def get_database_path(db_name):
+        return db_name
+    def is_mobile():
+        return False
+    def is_first_run():
+        return False
+
 
 class DBManager:
     """
@@ -10,12 +22,29 @@ class DBManager:
     
     Each method opens its own connection to avoid SQLite threading issues
     with Flet's multi-threaded event handlers.
+    
+    On mobile (Android/iOS), automatically uses app storage directory.
+    Handles first-run initialization with default data seeding.
     """
     
     def __init__(self, db_name='restaurant.db'):
-        self.db_name = db_name
+        # Use cross-platform storage path for database
+        self.db_name = get_database_path(db_name)
+        
+        # Check if database file exists before initialization
+        db_exists = os.path.exists(self.db_name)
+        
+        if not db_exists:
+            print(f"[DB] Creating new database at: {self.db_name}")
+        else:
+            print(f"[DB] Using existing database at: {self.db_name}")
+        
         # Initialize database schema (uses its own connection)
         self.initialize_db()
+        
+        # Log initialization result
+        if not db_exists:
+            print("[DB] Database initialized with default tables and sections")
     
     def _get_connection(self):
         """

@@ -6,9 +6,8 @@ selected date/time context.
 """
 
 from datetime import datetime, timedelta
-from typing import Dict, Optional
+from typing import Dict, Optional, TYPE_CHECKING
 from enum import Enum
-from db import DBManager
 from .time_utils import (
     parse_time_slot,
     calculate_reservation_end,
@@ -16,6 +15,10 @@ from .time_utils import (
     is_reservation_soon,
     get_current_sofia_time
 )
+
+# Use TYPE_CHECKING to avoid circular import with db.py
+if TYPE_CHECKING:
+    from db import DBManager
 
 
 class TableState(Enum):
@@ -35,7 +38,7 @@ class TableLayoutService:
     - FREE: Available
     """
     
-    def __init__(self, db_manager: DBManager):
+    def __init__(self, db_manager: "DBManager"):
         """
         Initialize table layout service.
         

@@ -132,6 +132,12 @@ def _init_app(page: ft.Page):
     # Page configuration - title will be updated dynamically
     page.title = t("app_title")
     page.theme_mode = ThemeMode.DARK
+
+    # Fullscreen mode - hides the Android status bar (clock, battery, notifications)
+    try:
+        page.window_full_screen = True
+    except Exception:
+        pass  # Ignore if not supported in this Flet build
     
     # Gradient background (elegant blue-to-purple)
     page.bgcolor = CompatColors.TRANSPARENT  # Required for gradient

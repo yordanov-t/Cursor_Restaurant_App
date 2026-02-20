@@ -19,6 +19,16 @@ from .reservation_service import ReservationService
 from .table_layout_service import TableLayoutService, TableState
 from .backup_service import BackupService
 
+from .storage import (
+    get_app_storage_path,
+    get_database_path,
+    get_backup_folder,
+    get_settings_path,
+    is_mobile,
+    is_first_run,
+    ensure_storage_initialized,
+)
+
 __all__ = [
     'parse_time_slot',
     'format_time_slot',
@@ -31,5 +41,12 @@ __all__ = [
     'TableLayoutService',
     'TableState',
     'BackupService',
+    'get_app_storage_path',
+    'get_database_path',
+    'get_backup_folder',
+    'get_settings_path',
+    'is_mobile',
+    'is_first_run',
+    'ensure_storage_initialized',
 ]
 

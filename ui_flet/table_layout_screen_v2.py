@@ -10,6 +10,7 @@ Features:
 """
 
 import flet as ft
+from datetime import date
 from typing import Callable, Dict, List, Optional, Tuple
 from core import TableLayoutService, TableState
 from db import DBManager
@@ -24,7 +25,8 @@ def create_table_layout_screen(
     page: ft.Page,
     table_layout_service: TableLayoutService,
     app_state,
-    refresh_callback: Callable
+    refresh_callback: Callable,
+    reservation_service=None  # Optional: for creating reservations from table clicks
 ):
     """Create the table layout screen with left sidebar and sections."""
     
@@ -85,7 +87,7 @@ def create_table_layout_screen(
         page.update()
     
     # ==========================================
-    # Action Panel for viewing reservation details
+    # Action Panel for viewing/creating reservations
     # ==========================================
     
     def handle_panel_close():
@@ -93,11 +95,59 @@ def create_table_layout_screen(
         update_table_selection(None)
     
     def handle_save(data):
-        """Not used - view-only panel."""
-        pass
+        """Save new reservation (create mode only)."""
+        if reservation_service:
+            try:
+                # Extract and map fields from ActionPanel data to service signature
+                table_number = data.get("table_number")
+                time_slot = data.get("time_slot")
+                customer_name = data.get("customer_name", "")
+                phone_number = data.get("phone", "")  # ActionPanel uses "phone" key
+                additional_info = data.get("notes", "")  # ActionPanel uses "notes" key
+                waiter_id = data.get("waiter_id")
+                
+                # Validate required fields
+                if not table_number or not time_slot or not customer_name:
+                    page.snack_bar = ft.SnackBar(
+                        ft.Text(t("please_fill_required_fields"), color=Colors.TEXT_PRIMARY),
+                        bgcolor=Colors.DANGER,
+                    )
+                    page.snack_bar.open = True
+                    page.update()
+                    return
+                
+                # Call service with correct positional arguments
+                reservation_service.create_reservation(
+                    table_number=int(table_number),
+                    time_slot=time_slot,
+                    customer_name=customer_name,
+                    phone_number=phone_number,
+                    additional_info=additional_info,
+                    waiter_id=int(waiter_id) if waiter_id else None
+                )
+                
+                # Show success message
+                page.snack_bar = ft.SnackBar(
+                    ft.Text(t("reservation_created"), color=Colors.TEXT_PRIMARY),
+                    bgcolor=Colors.SUCCESS,
+                )
+                page.snack_bar.open = True
+                page.update()
+                
+                # Refresh the screen
+                refresh_callback()
+                
+            except Exception as e:
+                # Show error message
+                page.snack_bar = ft.SnackBar(
+                    ft.Text(f"{t('error')}: {str(e)}", color=Colors.TEXT_PRIMARY),
+                    bgcolor=Colors.DANGER,
+                )
+                page.snack_bar.open = True
+                page.update()
     
     def handle_delete(res_id):
-        """Not used - view-only panel."""
+        """Not used from table layout."""
         pass
     
     action_panel = ActionPanel(
@@ -126,14 +176,20 @@ def create_table_layout_screen(
         
         state, res_data = current_table_states[table_num]
         
-        # Only show details for occupied or soon tables
+        # Update selection highlight
+        update_table_selection(table_num)
+        
+        # If occupied/soon: show reservation details (read-only)
         if state in (TableState.OCCUPIED, TableState.SOON_30) and res_data:
-            # Update selection highlight
-            update_table_selection(table_num)
-            
-            # Open details panel
             waiter_name = get_waiter_name(res_data.get("waiter_id"))
             action_panel.open_view(res_data, waiter_name)
+        
+        # If free: open create reservation panel with table pre-filled
+        elif state == TableState.FREE and reservation_service:
+            action_panel.open_create(app_state)
+            # Pre-fill the table number
+            action_panel.table_dropdown.value = str(table_num)
+            page.update()
     
     def get_filter_text():
         """Get filter context display text."""
@@ -310,7 +366,25 @@ def create_table_layout_screen(
             
             # Update status label
             if state == TableState.OCCUPIED:
-                status_label.value = ""
+                # Show "until HH:MM" for occupied tables
+                if info and isinstance(info, dict):
+                    try:
+                        from datetime import datetime, timedelta
+                        from core import RESERVATION_DURATION_MINUTES
+                        
+                        # Parse start time and calculate end time
+                        dt_start = datetime.strptime(info.get("time_slot", ""), "%Y-%m-%d %H:%M")
+                        dt_end = dt_start + timedelta(minutes=RESERVATION_DURATION_MINUTES)
+                        
+                        # Format as "до HH:MM" (Bulgarian) or "until HH:MM" (English)
+                        time_str = dt_end.strftime("%H:%M")
+                        prefix = "до" if app_state.language == "bg" else "until" if app_state.language == "en" else "jusqu'à" if app_state.language == "fr" else "до"
+                        status_label.value = f"{prefix} {time_str}"
+                        status_label.color = Colors.DANGER
+                    except:
+                        status_label.value = ""
+                else:
+                    status_label.value = ""
             elif state == TableState.SOON_30:
                 # info is now a dict, extract time_slot for display
                 if info and isinstance(info, dict):
@@ -360,6 +434,120 @@ def create_table_layout_screen(
         """Handle section dropdown change."""
         current_section_filter["value"] = e.control.value
         rebuild_sections_view()
+    
+    # ==========================================
+    # Filter Controls (Date, Hour, Minutes)
+    # ==========================================
+    
+    def on_date_change(e):
+        """Handle date filter change."""
+        if e.control.value:
+            selected_date = e.control.value
+            app_state.update_filter(filter_date=selected_date)
+            refresh_tables()
+    
+    def open_date_picker(e):
+        """Open the date picker dialog."""
+        current_date = app_state.filter_date
+        
+        def handle_date_change_picker(e):
+            if e.control.value:
+                selected_date = e.control.value
+                app_state.update_filter(filter_date=selected_date)
+                refresh_tables()
+        
+        def handle_dismiss(e):
+            pass  # Do nothing on dismiss
+        
+        date_picker_dialog = ft.DatePicker(
+            first_date=date(2020, 1, 1),
+            last_date=date(2030, 12, 31),
+            value=current_date,
+            on_change=handle_date_change_picker,
+            on_dismiss=handle_dismiss,
+        )
+        
+        page.overlay.append(date_picker_dialog)
+        date_picker_dialog.open = True
+        page.update()
+    
+    def get_date_display():
+        """Get formatted date display text."""
+        return app_state.get_selected_date().strftime("%d.%m.%Y")
+    
+    # Date display text
+    date_display_text = body_text(get_date_display(), weight=FontWeight.MEDIUM, size=Typography.SIZE_SM)
+    
+    # Date picker button (matching Reservations UI)
+    date_picker_field = ft.Container(
+        content=ft.Row(
+            [
+                ft.Container(
+                    content=date_display_text,
+                    expand=True,
+                ),
+                ft.Icon(icons.CALENDAR_TODAY, color=Colors.ACCENT_PRIMARY, size=18),
+            ],
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+        ),
+        bgcolor=Colors.SURFACE_GLASS,
+        border=ft.border.all(1, Colors.BORDER),
+        border_radius=Radius.SM,
+        padding=ft.padding.symmetric(horizontal=Spacing.SM, vertical=Spacing.XS),
+        on_click=open_date_picker,
+        ink=True,
+    )
+    
+    def update_date_display():
+        """Update date display text after filter changes."""
+        date_display_text.value = get_date_display()
+        page.update()
+    
+    def on_hour_change(e):
+        """Handle hour filter change."""
+        app_state.selected_hour = e.control.value
+        update_date_display()
+        refresh_tables()
+    
+    def on_minute_change(e):
+        """Handle minute filter change."""
+        app_state.selected_minute = e.control.value
+        update_date_display()
+        refresh_tables()
+    
+    # Hour dropdown
+    hour_options = [ft.dropdown.Option(t("all"))]
+    for h in range(0, 24):
+        hour_options.append(ft.dropdown.Option(f"{h:02d}"))
+    
+    hour_dropdown = ft.Dropdown(
+        label=t("hour"),
+        value=app_state.selected_hour,
+        options=hour_options,
+        on_change=on_hour_change,
+        width=None,
+        text_size=Typography.SIZE_SM,
+        dense=True,
+        bgcolor=Colors.SURFACE_GLASS,
+        border_color=Colors.BORDER,
+    )
+    
+    # Minute dropdown
+    minute_options = []
+    for m in [0, 15, 30, 45]:
+        minute_options.append(ft.dropdown.Option(f"{m:02d}"))
+    
+    minute_dropdown = ft.Dropdown(
+        label=t("minutes"),
+        value=app_state.selected_minute,
+        options=minute_options,
+        on_change=on_minute_change,
+        width=None,
+        text_size=Typography.SIZE_SM,
+        dense=True,
+        bgcolor=Colors.SURFACE_GLASS,
+        border_color=Colors.BORDER,
+    )
     
     # Build section dropdown options
     sections = db.get_all_section_tables()
@@ -424,11 +612,17 @@ def create_table_layout_screen(
                     heading(t("layout"), size=Typography.SIZE_LG, weight=FontWeight.BOLD),
                     ft.Divider(height=1, color=Colors.BORDER),
                     
-                    # Date/time info
+                    # Filters
                     ft.Container(
                         content=ft.Column([
-                            label(t("date_and_time"), color=Colors.TEXT_SECONDARY),
-                            filter_label,
+                            label(t("filters"), color=Colors.TEXT_SECONDARY),
+                            ft.Container(height=Spacing.XS),
+                            date_picker_field,
+                            ft.Container(height=Spacing.XS),
+                            ft.Row([
+                                ft.Container(content=hour_dropdown, expand=True),
+                                ft.Container(content=minute_dropdown, expand=True),
+                            ], spacing=Spacing.XS),
                         ], spacing=2),
                         padding=ft.padding.only(top=Spacing.SM),
                     ),
@@ -458,7 +652,7 @@ def create_table_layout_screen(
             ),
             padding=Spacing.LG,
         ),
-        width=220,
+        width=240,  # Slightly wider for filters
         padding=Spacing.MD,
     )
     

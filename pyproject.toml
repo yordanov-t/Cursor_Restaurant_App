@@ -1,0 +1,136 @@
+[project]
+name = "hushove-restaurant-app"
+version = "1.0.0"
+description = "Hushove Restaurant App - Restaurant Management System with Flet UI"
+requires-python = ">=3.8"
+dependencies = [
+    "flet>=0.21.0",
+]
+
+[tool.flet]
+# =============================================================================
+# Flet Build Configuration
+# =============================================================================
+# CRITICAL: Only include app source code. Exclude repository files.
+#
+# The packaged app.zip must contain:
+#   - core/ (at root level)
+#   - ui_flet/ (at root level)
+#   - main.py (Android/iOS entry point)
+#   - flet_app.py, db.py, etc.
+#
+# It must NOT contain:
+#   - main_app.py (desktop development only - NOT for Android)
+#   - .git/
+#   - .cursor/
+#   - build/
+#   - backups/
+#   - __pycache__/
+#   - restaurant.db (DB is created in app storage, not bundled)
+# =============================================================================
+
+[tool.flet.android]
+# Android-specific configuration
+app_name = "Hushove Restaurant App"
+package = "com.flet.hushove_restaurant_app"
+icon = "assets/icon.png"
+adaptive_icon_background = "#10B981"
+
+[tool.flet]
+
+# Include patterns - only these files/directories are packaged
+include = [
+    # Main entry point (Android/iOS ONLY - main.py, NOT main_app.py)
+    "main.py",
+    "flet_app.py",
+    "db.py",
+    
+    # Core business logic package
+    "core/__init__.py",
+    "core/storage.py",
+    "core/time_utils.py",
+    "core/reservation_service.py",
+    "core/table_layout_service.py",
+    "core/backup_service.py",
+    
+    # UI package
+    "ui_flet/__init__.py",
+    "ui_flet/theme.py",
+    "ui_flet/compat.py",
+    "ui_flet/i18n.py",
+    "ui_flet/app_state.py",
+    "ui_flet/action_panel.py",
+    "ui_flet/reservations_screen_v3.py",
+    "ui_flet/table_layout_screen_v2.py",
+    "ui_flet/admin_screen_v2.py",
+    
+    # Configuration
+    "requirements.txt",
+    
+    # Resources
+    "resources/restaurant_app_icon.png",
+]
+
+# Exclude patterns - these are explicitly excluded even if matched by include
+exclude = [
+    # Git repository
+    ".git",
+    ".git/**",
+    ".gitignore",
+    
+    # Editor/IDE files
+    ".cursor",
+    ".cursor/**",
+    ".vscode",
+    ".vscode/**",
+    "*.code-workspace",
+    
+    # Build artifacts
+    "build",
+    "build/**",
+    "dist",
+    "dist/**",
+    "*.egg-info",
+    
+    # Python cache
+    "__pycache__",
+    "__pycache__/**",
+    "**/__pycache__",
+    "**/__pycache__/**",
+    "*.pyc",
+    "*.pyo",
+    "*.pyd",
+    
+    # Database files (created at runtime in app storage)
+    "*.db",
+    "*.db-journal",
+    "*.db-wal",
+    "*.db-shm",
+    "restaurant.db",
+    
+    # Backup files (created at runtime in app storage)
+    "backups",
+    "backups/**",
+    
+    # Settings (created at runtime)
+    "settings.json",
+    
+    # Legacy/unused files
+    "legacy_tk_ui.py",
+    "visualization.py",
+    "ui",
+    "ui/**",
+    "services",
+    "services/**",
+    
+    # Verification/test scripts
+    "verify_build.py",
+    "test_*.py",
+    "*_test.py",
+    
+    # Documentation
+    "*.md",
+    "README.md",
+    "docs",
+    "docs/**",
+]

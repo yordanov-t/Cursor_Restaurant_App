@@ -36,7 +36,14 @@ if (Test-Path $mp) {
         $c = $c -replace '(<application\b[^>]*)(>)', '$1 android:usesCleartextTraffic="true"$2'
         $changed = $true
     }
-    if ($changed) { Set-Content $mp $c -NoNewline; Write-Host '  Manifest patched' -ForegroundColor Green }
+    # Fullscreen: hide status bar via windowLayoutInDisplayCutoutMode + immersive sticky flags
+    # Note: actual fullscreen is handled by page.window_full_screen = True in flet_app.py
+    # The manifest only needs to declare the cutout mode so content extends edge-to-edge
+    if ($c -notmatch 'layoutInDisplayCutoutMode') {
+        $c = $c -replace '(<activity\b[^>]*)(>)', '$1 android:windowSoftInputMode="adjustResize" android:windowLayoutInDisplayCutoutMode="shortEdges"$2'
+        $changed = $true
+    }
+    if ($changed) { Set-Content $mp $c -NoNewline; Write-Host '  Manifest patched (extractNativeLibs + cleartext + fullscreen)' -ForegroundColor Green }
     else { Write-Host '  Manifest already patched' -ForegroundColor Gray }
 }
 

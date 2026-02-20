@@ -5,8 +5,7 @@ This service is UI-agnostic and can be used by any UI framework.
 """
 
 from datetime import datetime
-from typing import List, Dict, Any, Optional
-from db import DBManager
+from typing import List, Dict, Any, Optional, TYPE_CHECKING
 from .time_utils import (
     parse_time_slot,
     calculate_reservation_end,
@@ -14,6 +13,10 @@ from .time_utils import (
     get_current_sofia_time,
     RESERVATION_DURATION_MINUTES
 )
+
+# Use TYPE_CHECKING to avoid circular import with db.py
+if TYPE_CHECKING:
+    from db import DBManager
 
 
 class ReservationService:
@@ -25,7 +28,7 @@ class ReservationService:
     - Sorting by start time ascending
     """
     
-    def __init__(self, db_manager: DBManager):
+    def __init__(self, db_manager: "DBManager"):
         """
         Initialize reservation service.
         
